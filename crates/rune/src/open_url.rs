@@ -206,7 +206,7 @@ fn open(url: &str) -> Result<(), OpenUrlError> {
     if result as usize > 32 { Ok(()) } else { Err(OpenUrlError::Failed(format!("ShellExecute returned {}", result as usize))) }
 }
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "tvos", target_os = "android"))))]
 fn open(url: &str) -> Result<(), OpenUrlError> {
     debug_assert!(!url.starts_with('-'));
     // xdg-open's argument loop rejects `--` as an unknown option; `check` guarantees a scheme prefix.
@@ -218,7 +218,7 @@ fn open(url: &str) -> Result<(), OpenUrlError> {
     Ok(())
 }
 
-#[cfg(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows", all(unix, not(any(target_os = "ios", target_os = "android"))))))]
+#[cfg(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows", all(unix, not(any(target_os = "ios", target_os = "tvos", target_os = "android"))))))]
 fn open(_: &str) -> Result<(), OpenUrlError> { Err(OpenUrlError::Failed("this platform can't open links".into())) }
 
 #[cfg(test)]

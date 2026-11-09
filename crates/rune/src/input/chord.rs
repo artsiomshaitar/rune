@@ -30,7 +30,7 @@ impl KeyPlatform {
     /// The platform this build runs on.
     #[cfg(not(target_arch = "wasm32"))]
     pub const fn current() -> Self {
-        if cfg!(any(target_os = "macos", target_os = "ios")) { return Self::Mac; }
+        if cfg!(any(target_os = "macos", target_os = "ios", target_os = "tvos")) { return Self::Mac; }
         if cfg!(target_os = "windows") { return Self::Windows; }
         Self::Linux
     }

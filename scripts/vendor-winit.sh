@@ -5,7 +5,8 @@
 # DLLs on its UI thread before its first frame; and a window given a position is made there, at
 # its display's scale, not moved there and resized; and a new window's system menu, whose Close
 # is already enabled, isn't copied for the window just to enable it again; and a window is made
-# with the minimize and maximize boxes it asks for, not given them by a second style change). Run it when winit is bumped, then build: a patch
+# with the minimize and maximize boxes it asks for, not given them by a second style change; tvOS: it builds as iOS, where winit files it under
+# free Unix and pulls in calloop and Wayland). Run it when winit is bumped, then build: a patch
 # that no longer applies fails here, and the change goes back in by hand. If upstream winit takes
 # the change, delete vendor/winit and its `[patch.crates-io]` entry instead.
 # Usage: scripts/vendor-winit.sh <version>     e.g. scripts/vendor-winit.sh 0.30.13

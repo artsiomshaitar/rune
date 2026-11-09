@@ -6,6 +6,7 @@ use std::sync::{Arc, OnceLock};
 
 use crate::compose::{Compositor, Frame};
 use crate::frame::clock::FrameClock;
+use crate::remote::{self, Feed};
 use crate::render::{Gpu, Renderer};
 use crate::runtime::{Env, Runtime, Waker};
 use crate::time::Instant;
@@ -58,6 +59,8 @@ pub struct LayerHost<S: 'static> {
     rt: Runtime<S>,
     clock: FrameClock,
     suspended: bool,
+    remote: Feed,
+    start: Instant,
 }
 
 impl<S: 'static> LayerHost<S> {
@@ -115,6 +118,8 @@ impl<S: 'static> LayerHost<S> {
             rt,
             clock: FrameClock::new(now),
             suspended: viewport.0 <= 0.0 || viewport.1 <= 0.0,
+            remote: Feed::default(),
+            start: now,
         })
     }
 
@@ -154,11 +159,26 @@ impl<S: 'static> LayerHost<S> {
         self.rt.set_viewport((px_w as f32 / scale, px_h as f32 / scale), scale);
     }
 
+    /// Siri Remote input, as keys (`rune::remote`): call it from `pressesBegan`/`pressesEnded`
+    /// and the indirect touches of the hosting view, then request a frame. A held arrow repeats
+    /// from [`LayerHost::frame`], whose `wake_after_secs` includes the next repeat.
+    pub fn remote(&mut self, input: remote::Input) {
+        let now = self.seconds();
+        self.remote.input(&mut self.rt, input, now);
+    }
+
+    /// Seconds since this host opened, the clock the remote's repeats run on.
+    fn seconds(&self) -> f64 {
+        self.start.elapsed().as_secs_f64()
+    }
+
     /// Steps animations and layout to `Instant::now()` and presents one Metal frame.
     pub fn frame(&mut self) -> EmbedFrame {
         if self.suspended {
             return EmbedFrame::default();
         }
+        let now = self.seconds();
+        self.remote.poll(&mut self.rt, now);
         let t0 = Instant::now();
         let (animating, dt) = self.clock.advance(&mut self.rt, t0, false);
         let update_ms = t0.elapsed().as_secs_f64() * 1000.0;
@@ -218,6 +238,11 @@ impl<S: 'static> LayerHost<S> {
             let elapsed = self.rt.wall_start?.elapsed().as_secs_f64();
             Some((d - elapsed).max(0.0))
         });
+        let remote_after = self.remote.wake_at().map(|due| (due - self.seconds()).max(0.0));
+        let wake_after_secs = match (wake_after_secs, remote_after) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         let comp_animating = self.compositor.as_ref().is_some_and(|c| c.animating());
         let keep_ticking = animating || comp_animating || self.rt.has_pending_input() || self.rt.live_pending();
         EmbedFrame {
@@ -281,5 +306,25 @@ mod tests {
         let out = host.frame();
         assert!(out.drew);
         assert_eq!(seen.load(Ordering::Relaxed), 42);
+    }
+
+    #[test]
+    fn a_held_remote_arrow_wakes_the_host_for_its_repeat() {
+        use crate::remote::{Button, Input, REPEAT_DELAY};
+        let layer: Retained<AnyObject> = unsafe { msg_send![AnyClass::get(c"CAMetalLayer").expect("QuartzCore"), new] };
+        let view = |_: &u32, _: &mut Cx<u32>| -> El { col().size(120.0, 80.0) };
+        let on_key = |s: &mut u32, _: &crate::KeyEvent, _: &mut crate::Tx| { *s += 1; true };
+        let spec = AppSpec { on_key: Some(on_key), ..AppSpec::new("embed-remote", (120.0, 80.0), || 0, view) };
+        let host = unsafe {
+            LayerHost::from_core_animation_layer(Retained::as_ptr(&layer) as *mut std::ffi::c_void, &spec, 0, (120.0, 80.0), 2.0, true, Arc::new(|| {}))
+        };
+        let Ok(mut host) = host else { return };
+        host.remote(Input::Press(Button::Down));
+        let out = host.frame();
+        assert_eq!(host.runtime().state, 1, "the press reached on_key");
+        let wake = out.wake_after_secs.expect("a wake for the repeat");
+        assert!(wake > 0.0 && wake <= REPEAT_DELAY, "{wake}");
+        host.remote(Input::Release(Button::Down));
+        assert_eq!(host.frame().wake_after_secs, None, "released: nothing to wake for");
     }
 }

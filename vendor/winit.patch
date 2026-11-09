@@ -1,3 +1,158 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 4bfded8a..2e26b535 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -226,31 +226,31 @@ version = "1"
+ version = "2"
+ default-features = false
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.ahash]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.ahash]
+ version = "0.8.7"
+ features = ["no-rng"]
+ optional = true
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.bytemuck]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.bytemuck]
+ version = "1.13.1"
+ optional = true
+ default-features = false
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.calloop]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.calloop]
+ version = "0.13.0"
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.libc]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.libc]
+ version = "0.2.64"
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.memmap2]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.memmap2]
+ version = "0.9.0"
+ optional = true
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.percent-encoding]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.percent-encoding]
+ version = "2.0"
+ optional = true
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.rustix]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.rustix]
+ version = "0.38.4"
+ features = [
+     "std",
+@@ -260,43 +260,43 @@ features = [
+ ]
+ default-features = false
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.sctk]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.sctk]
+ version = "0.19.2"
+ features = ["calloop"]
+ optional = true
+ default-features = false
+ package = "smithay-client-toolkit"
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.sctk-adwaita]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.sctk-adwaita]
+ version = "0.10.1"
+ optional = true
+ default-features = false
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.wayland-backend]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.wayland-backend]
+ version = "0.3.10"
+ features = ["client_system"]
+ optional = true
+ default-features = false
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.wayland-client]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.wayland-client]
+ version = "0.31.10"
+ optional = true
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.wayland-protocols]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.wayland-protocols]
+ version = "0.32.8"
+ features = ["staging"]
+ optional = true
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.wayland-protocols-plasma]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.wayland-protocols-plasma]
+ version = "0.3.8"
+ features = ["client"]
+ optional = true
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.x11-dl]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.x11-dl]
+ version = "2.19.1"
+ optional = true
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.x11rb]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.x11rb]
+ version = "0.13.0"
+ features = [
+     "allow-unsafe-code",
+@@ -309,20 +309,20 @@ features = [
+ optional = true
+ default-features = false
+ 
+-[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "macos"))))'.dependencies.xkbcommon-dl]
++[target.'cfg(all(unix, not(any(target_os = "redox", target_family = "wasm", target_os = "android", target_os = "ios", target_os = "tvos", target_os = "macos"))))'.dependencies.xkbcommon-dl]
+ version = "0.4.2"
+ 
+-[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies.block2]
++[target.'cfg(any(target_os = "ios", target_os = "tvos", target_os = "macos"))'.dependencies.block2]
+ version = "0.5.1"
+ 
+-[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies.core-foundation]
++[target.'cfg(any(target_os = "ios", target_os = "tvos", target_os = "macos"))'.dependencies.core-foundation]
+ version = "0.9.3"
+ 
+-[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies.objc2]
++[target.'cfg(any(target_os = "ios", target_os = "tvos", target_os = "macos"))'.dependencies.objc2]
+ version = "0.5.2"
+ features = ["relax-sign-encoding"]
+ 
+-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dev-dependencies.softbuffer]
++[target.'cfg(not(any(target_os = "android", target_os = "ios", target_os = "tvos")))'.dev-dependencies.softbuffer]
+ version = "0.4.0"
+ features = [
+     "x11",
+@@ -415,7 +415,7 @@ version = "0.6.0"
+ version = "0.9.0"
+ default-features = false
+ 
+-[target.'cfg(target_os = "ios")'.dependencies.objc2-foundation]
++[target.'cfg(any(target_os = "ios", target_os = "tvos"))'.dependencies.objc2-foundation]
+ version = "0.2.2"
+ features = [
+     "block2",
+@@ -431,7 +431,7 @@ features = [
+     "NSSet",
+ ]
+ 
+-[target.'cfg(target_os = "ios")'.dependencies.objc2-ui-kit]
++[target.'cfg(any(target_os = "ios", target_os = "tvos"))'.dependencies.objc2-ui-kit]
+ version = "0.2.2"
+ features = [
+     "UIApplication",
+diff --git a/build.rs b/build.rs
+index 6a4528b3..64800981 100644
+--- a/build.rs
++++ b/build.rs
+@@ -10,9 +10,9 @@ fn main() {
+         android_platform: { target_os = "android" },
+         web_platform: { all(target_family = "wasm", target_os = "unknown") },
+         macos_platform: { target_os = "macos" },
+-        ios_platform: { target_os = "ios" },
++        ios_platform: { any(target_os = "ios", target_os = "tvos") },
+         windows_platform: { target_os = "windows" },
+-        apple: { any(target_os = "ios", target_os = "macos") },
++        apple: { any(target_os = "ios", target_os = "tvos", target_os = "macos") },
+         free_unix: { all(unix, not(apple), not(android_platform), not(target_os = "emscripten")) },
+         redox: { target_os = "redox" },
+ 
 diff --git a/src/platform_impl/windows/window.rs b/src/platform_impl/windows/window.rs
 index 228c6f0..1fcf1f2 100644
 --- a/src/platform_impl/windows/window.rs

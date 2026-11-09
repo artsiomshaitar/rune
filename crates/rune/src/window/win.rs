@@ -56,7 +56,7 @@ impl SurfaceRetries {
 pub(super) struct Win {
     /// The OS accessibility adapter, which goes before the window it answers for.
     pub(super) a11y: Option<crate::a11y::Adapter>,
-    #[cfg_attr(not(any(target_os = "macos", all(unix, not(target_os = "ios"), not(target_os = "android")))), allow(dead_code))]
+    #[cfg_attr(not(any(target_os = "macos", all(unix, not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))), allow(dead_code))]
     pub(super) native: Native,
     pub(super) first_frame: FirstFrame,
     /// The surface it draws into. None only while `Host::reattach` replaces it: the old surface

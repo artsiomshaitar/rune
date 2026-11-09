@@ -490,7 +490,7 @@ fn walk_font_dirs() -> Vec<(String, std::path::PathBuf)> {
                     .map(|entry| entry.path()),
             );
         }
-    } else if cfg!(target_os = "ios") {
+    } else if cfg!(any(target_os = "ios", target_os = "tvos")) {
         dirs.push("/System/Library/Fonts".into());
     } else if cfg!(windows) {
         let root = std::env::var_os("WINDIR").map_or_else(|| "C:\\Windows".into(), std::path::PathBuf::from);

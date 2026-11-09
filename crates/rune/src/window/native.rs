@@ -63,7 +63,7 @@ impl Prime {
 #[path = "native_tests.rs"]
 mod tests;
 
-#[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+#[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
 #[derive(Default)]
 pub(super) struct Native {
     pub(super) activator: Option<crate::platform::activation::Activator>,
@@ -96,6 +96,6 @@ pub(super) enum A11yStart {
     AfterFirstFrame,
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows", all(unix, not(target_os = "ios"), not(target_os = "android")))))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", all(unix, not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))))]
 #[derive(Default)]
 pub(super) struct Native;

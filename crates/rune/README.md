@@ -2445,6 +2445,34 @@ Without `libxkbcommon-x11-0` every windowed example panics at startup with
 `Library libxkbcommon-x11.so could not be loaded`; installing the package fixes
 it, and the app then runs under Xvfb. Headless `--snap` runs don't need a display or the XKB library.
 
+### Apple TV (`rune::tvos`, `scripts/tvos-app`)
+
+A Rune app runs as a whole tvOS app with no Swift: `main` hands the same `AppSpec` to
+`rune::tvos::TvApp` instead of `rune::run`.
+
+```rust
+fn main() {
+    #[cfg(target_os = "tvos")]
+    rune::tvos::TvApp::new(spec()).menu_exits(|s| s.on_first_screen()).run();
+    #[cfg(not(target_os = "tvos"))]
+    rune::run(spec());
+}
+```
+
+The shell gives the scene a `CAMetalLayer` filling its window and drives a `LayerHost` onto it
+from a `CADisplayLink` that pauses while nothing animates. The Siri Remote arrives as keys
+(`rune::remote`): arrows as arrows, Select as Space (which presses the focused control) and Menu
+as Escape; a held arrow repeats, and a swipe on the touch surface sends an arrow per 320 points.
+`menu_exits` says when Menu goes to the system instead, which on the first screen returns to the
+Home screen. A screen of cards usually owns its focus in state and moves it in `on_key`, so
+the same keys drive it in a desktop window and in tests.
+
+`scripts/tvos-app <package>` builds for `aarch64-apple-tvos-sim`, writes the `.app` with the
+`Info.plist` the shell needs (the scene delegate is `RuneTVSceneDelegate`), signs it ad hoc and
+launches it on an Apple TV simulator; `SHOT=out.png` screenshots it. `examples/tvos-hello` is the
+smallest app. Rune builds for tvOS with a vendored winit 0.30.13 that treats tvOS as iOS
+(`vendor/winit.patch`); no Rune window runs on winit there.
+
 ## Agent tooling (headless, no window, same renderer, fixed virtual clock)
 
 ```sh

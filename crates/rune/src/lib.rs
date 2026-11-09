@@ -235,12 +235,15 @@ pub use platform::macos::appearance as macos_appearance;
 #[cfg(target_os = "macos")]
 #[doc(hidden)]
 pub use platform::macos::panel_bridge as macos_panel_bridge;
+pub use platform::remote;
 pub use platform::scroll_bars::ScrollBars;
 #[doc(hidden)]
 pub use platform::scroll_bars::current_runtime_id;
 pub use platform::scroll_bars::system_scroll_bars;
 pub use platform::scroll_bars::system_scroller_jumps;
 pub use platform::scroll_bars::system_scroller_overlay;
+#[cfg(target_os = "tvos")]
+pub use platform::tvos;
 #[cfg(target_arch = "wasm32")]
 pub use platform::web;
 pub use playground::Play;
