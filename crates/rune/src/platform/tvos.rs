@@ -398,7 +398,9 @@ impl Controller {
     fn view_size(&self) -> Option<((f32, f32), f32, CGRect)> {
         let view: Retained<UIView> = self.view()?;
         let bounds = view.bounds();
-        let scale = view.contentScaleFactor() as f32;
+        // The screen's scale, not the view's: a plain view backed by no drawing of its own reports
+        // 1, so on an Apple TV 4K the app drew at 1080p and the TV upscaled it.
+        let scale = screen_scale(&view).unwrap_or_else(|| view.contentScaleFactor()) as f32;
         Some(((bounds.size.width as f32, bounds.size.height as f32), scale.max(1.0), bounds))
     }
 
@@ -445,5 +447,18 @@ impl Controller {
         if let Some(after) = frame.wake_after_secs {
             crate::platform::main_queue::on_main_after(after, || with_controller(Controller::resume));
         }
+    }
+}
+
+/// The scale of the screen showing `view`: 2 on an Apple TV 4K at 4K, 1 at 1080p. `None` before
+/// the view is in a window.
+fn screen_scale(view: &UIView) -> Option<f64> {
+    // SAFETY: `UIView.window`, `UIWindow.screen` and `UIScreen.scale` exist on every tvOS this
+    // supports, and this runs on the main thread, in layout.
+    unsafe {
+        let window: Option<Retained<AnyObject>> = msg_send![view, window];
+        let screen: Option<Retained<AnyObject>> = msg_send![&*window?, screen];
+        let scale: f64 = msg_send![&*screen?, scale];
+        Some(scale)
     }
 }
