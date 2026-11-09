@@ -1,5 +1,6 @@
 //! What `El` holds for focus and keys: `FocusSpec`, kept behind `Cold` because most elements set none of it.
 use crate::el::{InputKeyFn, StepFn, StepLimitFn};
+use crate::el::spatial::{FocusHeldFn, FocusMoveFn};
 use crate::color::Color;
 use crate::el::Outline;
 
@@ -13,6 +14,12 @@ pub(crate) struct FocusSpec {
     pub autofocus: bool,
     pub order: i32,
     pub group: bool,
+    /// `focus_section`.
+    pub section: bool,
+    /// `on_focus_move`.
+    pub on_move: Option<FocusMoveFn>,
+    /// `on_focus_held`.
+    pub on_held: Option<FocusHeldFn>,
     pub selected: bool,
     pub reveal_selected: bool,
     pub preserve_on_press: crate::runtime::selectable::OnPress,
@@ -50,6 +57,9 @@ impl crate::cold::Empty for FocusSpec {
         autofocus: false,
         order: 0,
         group: false,
+        section: false,
+        on_move: None,
+        on_held: None,
         selected: false,
         reveal_selected: false,
         preserve_on_press: crate::runtime::selectable::OnPress { focus: false, selection: false },
