@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::color::Color;
 use crate::el::{El, InputKeyFn, Outline, PressFn, RoleTag, StepFn, StepLimitFn, Tx};
+use crate::el::spatial::{FocusHeldFn, FocusMoveFn};
 use crate::states::downcast;
 
 #[derive(Clone)]
@@ -16,6 +17,12 @@ pub(crate) struct FocusSpec {
     pub autofocus: bool,
     pub order: i32,
     pub group: bool,
+    /// `focus_section`.
+    pub section: bool,
+    /// `on_focus_move`.
+    pub on_move: Option<FocusMoveFn>,
+    /// `on_focus_held`.
+    pub on_held: Option<FocusHeldFn>,
     pub selected: bool,
     pub reveal_selected: bool,
     pub preserve_on_press: crate::runtime::selectable::OnPress,
@@ -55,6 +62,9 @@ impl crate::cold::Empty for FocusSpec {
         autofocus: false,
         order: 0,
         group: false,
+        section: false,
+        on_move: None,
+        on_held: None,
         selected: false,
         reveal_selected: false,
         preserve_on_press: crate::runtime::selectable::OnPress { focus: false, selection: false },

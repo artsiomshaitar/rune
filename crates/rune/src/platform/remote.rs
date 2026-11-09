@@ -214,6 +214,7 @@ pub(crate) struct Feed {
 #[cfg_attr(not(any(test, target_vendor = "apple")), allow(dead_code))]
 impl Feed {
     pub(crate) fn input<S: 'static>(&mut self, rt: &mut crate::Runtime<S>, input: Input, now: f64) {
+        rt.remote_drives_focus();
         for effect in self.remote.step(input, now) {
             match effect {
                 Effect::Key(ev) => rt.key(ev),

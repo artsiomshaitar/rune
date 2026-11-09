@@ -285,6 +285,9 @@ impl<S: 'static> Runtime<S> {
             let (mark, at) = (self.nodes[mark].path.clone(), self.nodes[at].path.clone());
             self.focus.remember_scope(mark, at);
         }
+        if self.focus.path().is_some() {
+            self.remember_section_focus();
+        }
         self.sync_side_focus();
         // A hover group keyboard focus enters or leaves hovers or rests now (`El::hover_group`).
         // Focus that stayed where it was, shown as it was (every commit's focus pass, most of
