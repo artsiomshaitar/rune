@@ -108,6 +108,8 @@ impl<S: 'static> LayerHost<S> {
         let now = Instant::now();
         rt.wall_start = Some(now);
         rt.record_events = false;
+        // `draw` below clears to `clear_color`, so the root's own fill needn't paint again.
+        rt.root_cleared = true;
 
         Ok(Self {
             gpu,
