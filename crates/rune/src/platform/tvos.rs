@@ -70,10 +70,11 @@ impl<S: 'static> TvApp<S> {
         self
     }
 
-    /// Draws at `scale` device pixels per point instead of the screen's own, and lets the
-    /// screen upscale the rest. On an Apple TV 4K, 1.5 draws 2880x1620: just over half the
-    /// pixels of 4K, which buys a frame budget the full resolution can miss, and text stays far
-    /// crisper than at 1080p. The `RUNE_TVOS_SCALE` environment variable overrides it.
+    /// Draws at no more than `scale` device pixels per point, and lets the screen upscale the
+    /// rest. On an Apple TV 4K, 1.5 draws 2880x1620: just over half the pixels of 4K, which buys
+    /// a frame budget the full resolution can miss, and text stays far crisper than at 1080p. A
+    /// screen with a lower scale (a 1080p television) draws at its own. The `RUNE_TVOS_SCALE`
+    /// environment variable overrides it, uncapped.
     pub fn render_scale(mut self, scale: f64) -> Self {
         self.render_scale = Some(scale).filter(|s| s.is_finite() && *s > 0.0);
         self
@@ -471,17 +472,16 @@ impl Controller {
 fn screen_scale(view: &UIView) -> Option<f64> {
     // `RUNE_TVOS_SCALE=1.5` draws at that scale instead, over `TvApp::render_scale`: for
     // weighing sharpness against frame time on a given Apple TV.
-    let chosen = std::env::var("RUNE_TVOS_SCALE").ok().and_then(|v| v.parse::<f64>().ok()).filter(|s| *s > 0.0)
-        .or_else(|| RENDER_SCALE.with(Cell::get));
-    if let Some(scale) = chosen {
+    if let Some(scale) = std::env::var("RUNE_TVOS_SCALE").ok().and_then(|v| v.parse::<f64>().ok()).filter(|s| *s > 0.0) {
         return Some(scale);
     }
+    let cap = RENDER_SCALE.with(Cell::get);
     // SAFETY: `UIView.window`, `UIWindow.screen` and `UIScreen.scale` exist on every tvOS this
     // supports, and this runs on the main thread, in layout.
     unsafe {
         let window: Option<Retained<AnyObject>> = msg_send![view, window];
         let screen: Option<Retained<AnyObject>> = msg_send![&*window?, screen];
         let scale: f64 = msg_send![&*screen?, scale];
-        Some(scale)
+        Some(cap.map_or(scale, |cap| cap.min(scale)))
     }
 }
