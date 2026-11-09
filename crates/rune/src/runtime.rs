@@ -112,6 +112,8 @@ mod capture;
 mod focus_machine;
 #[path = "runtime/input/modal_focus.rs"]
 mod modal_focus;
+#[path = "runtime/input/spatial.rs"]
+mod spatial;
 #[path = "runtime/input/physical.rs"]
 mod physical_dispatch;
 #[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(unused_imports))]
@@ -635,6 +637,8 @@ pub struct Runtime<S: 'static> {
     tab_visits_controls: bool,
     /// The open modals and where focus returns as each closes (`modal_focus`).
     modal_focus: modal_focus::ModalFocus,
+    /// Arrow-key focus by geometry and each section's last focus (`spatial`).
+    spatial: spatial::SpatialFocus,
     /// Focus when the running commit began, before a new view's focus request applied: what a
     /// modal that opens in this commit returns focus to.
     focus_before_commit: Option<String>,
@@ -991,6 +995,7 @@ impl<S: 'static> Runtime<S> {
             full_keyboard_access: true,
             tab_visits_controls: false,
             modal_focus: modal_focus::ModalFocus::Closed,
+            spatial: Default::default(),
             focus_before_commit: None,
             focus_request: None,
             focus_returned: false,

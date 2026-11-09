@@ -3,7 +3,8 @@ use super::*;
 
 impl<S: 'static> Runtime<S> {
     /// Offer a logical key that already passed `held_gate` to the app, the focused
-    /// input's handler, focus traversal and the focused editor, in that order.
+    /// input's handler, focus traversal, the focused editor, the app again and spatial focus,
+    /// in that order.
     pub(super) fn route_key(&mut self, ev: &KeyEvent, repeat: bool, one: &mut Tx) -> bool {
         let physical_key = one.physical_key;
         one.by_keys = true;
@@ -87,6 +88,7 @@ impl<S: 'static> Runtime<S> {
             return true;
         }
         one.physical_key = None;
+        if self.spatial_key(ev, one) { return true; }
         // Selected text takes the Cmd+A and Cmd+C nothing else took, as AppKit's responder chain
         // gives a key equivalent to the menu bar before the text view: an app's shortcut wins.
         if !repeat && self.selection_key(ev, one) { return true; }

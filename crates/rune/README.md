@@ -243,6 +243,25 @@ Rune's core crate: views, layout, animation, rendering, text and the native shel
   activates non-text controls. `.modal(click_outside, close)` traps Tab, handles Escape, makes the
   background inert and restores the opener. Nested modals restore in stack order. Inspector tree
   flags (`focusable`, `focused`, `focusVisible`, `inert`) are the future platform AX hook.
+- **Spatial focus** (`cx.spatial_focus()`, on by default once a Siri Remote sends input): arrows
+  move focus to the nearest focusable element that way, from where the elements are drawn, as
+  the tvOS focus engine does. An arrow with nothing focused focuses the element last focused,
+  else the first. For a move from the focused rect `F` to a candidate `C`: `C` must lie in the
+  half-plane that way (its near edge at or past `F`'s centre line, its far edge past `F`'s far
+  edge); candidates that overlap `F` across the move beat those that don't; then the nearer
+  wins (the gap along the move for overlapping ones, the distance between closest edges for the
+  rest, to the half point); then the better centred across the move; then document order.
+  `.focus_section()` makes a container one target the size of its frame from outside: entering
+  it lands on its last focus, else on its member nearest the press, so a nav bar or a row of
+  posters is "back where you left". `.on_focus_move(|s, mv: &FocusMove, tx| ..)` on the focused
+  element or any ancestor replaces a move: it gets the direction, the focused element and every
+  other candidate (`FocusCandidate`: key, path, drawn rect, section key) with the default's
+  index, and returns `FocusTarget::To(key)`, `Held` or `Default` (ask the next hook out, then
+  the rule). A press with nowhere to go is held, not dropped: `.on_focus_held(|s, dir, tx| ..)`
+  hears it, to play a bump. Space (the remote's Select) presses the focused control and the
+  focus ring shows as for any keyboard focus (`cx.focus_ring`, `.focus_ring`, `.focus_fill`,
+  `.no_focus_ring` restyle it). It runs last for arrows (step 10 below): an app's `on_key` that
+  takes them bypasses it, and Tab is unchanged.
 - **Key routing**: a key the OS delivers to the window goes to the first of these that takes it.
   Global shortcuts and native menu key equivalents are handled before the window sees the key.
   1. Return and Escape while a field composes (IME preedit), or while `App::on_ime`'s editor
@@ -269,6 +288,7 @@ Rune's core crate: views, layout, animation, rendering, text and the native shel
      overflows keeps them, even at the edge a key moves toward (where it does nothing), as an
      NSTextView does. To page another view, route the keys yourself with
      `tx.scroll_page(key, pages)`.
+  10. Arrows, under spatial focus, move focus or are held (see "Spatial focus" above).
 
   Return follows AppKit, where it belongs to the default button and Space presses the focused
   one:
@@ -2464,8 +2484,10 @@ from a `CADisplayLink` that pauses while nothing animates. The Siri Remote arriv
 (`rune::remote`): arrows as arrows, Select as Space (which presses the focused control) and Menu
 as Escape; a held arrow repeats, and a swipe on the touch surface sends an arrow per 320 points.
 `menu_exits` says when Menu goes to the system instead, which on the first screen returns to the
-Home screen. A screen of cards usually owns its focus in state and moves it in `on_key`, so
-the same keys drive it in a desktop window and in tests.
+Home screen. Arrows move focus between `focusable` elements by geometry (see "Spatial focus"),
+with `focus_section` for rows and nav bars and `on_focus_move` for a screen's own rules; a
+screen that owns its focus in state can still move it in `on_key`, which takes the arrows first,
+so the same keys drive it in a desktop window and in tests.
 
 `scripts/tvos-app <package>` builds for `aarch64-apple-tvos-sim`, writes the `.app` with the
 `Info.plist` the shell needs (the scene delegate is `RuneTVSceneDelegate`), signs it ad hoc and
