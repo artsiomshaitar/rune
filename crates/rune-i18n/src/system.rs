@@ -44,7 +44,7 @@ fn platform() -> Vec<String> {
     buffer.split(|&unit| unit == 0).filter(|name| !name.is_empty()).map(String::from_utf16_lossy).collect()
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "tvos"))]
 fn platform() -> Vec<String> {
     objc2_foundation::NSLocale::preferredLanguages().iter().map(|tag| tag.to_string()).collect()
 }
@@ -55,7 +55,7 @@ fn platform() -> Vec<String> {
     window.navigator().languages().iter().filter_map(|tag| tag.as_string()).collect()
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios", target_os = "tvos", target_arch = "wasm32")))]
 fn platform() -> Vec<String> {
     posix_languages(|name| std::env::var_os(name).and_then(|value| value.into_string().ok()))
 }

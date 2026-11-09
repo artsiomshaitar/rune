@@ -45,11 +45,11 @@ pub(super) fn monitor(event_loop: &ActiveEventLoop, target: &DisplayTarget) -> O
 pub(crate) fn monitor_at(event_loop: &ActiveEventLoop, target: &DisplayTarget, sampled: Option<(i32, i32)>) -> Option<winit::monitor::MonitorHandle> {
     let monitors: Vec<_> = event_loop.available_monitors().collect();
     let primary = event_loop.primary_monitor().and_then(|p| monitors.iter().position(|m| *m == p));
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
     let resolved = if let DisplayTarget::Native(crate::NativeDisplayId::X11Output(output)) = target {
         if !crate::window::is_wayland(event_loop) { crate::platform::x11::overlay::output_crtc(*output).map(|id| DisplayTarget::Native(crate::NativeDisplayId::X11Crtc(id))) } else { None }
     } else { None };
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
     let target = resolved.as_ref().unwrap_or(target);
     let requested = match target {
         DisplayTarget::Id(id) => monitors.iter().position(|m| *m == id.0),
@@ -62,9 +62,9 @@ pub(crate) fn monitor_at(event_loop: &ActiveEventLoop, target: &DisplayTarget, s
     }).collect();
     #[cfg(target_os = "windows")]
     let pointer = (*target == DisplayTarget::UnderPointer).then(crate::platform::win32::pointer_position).flatten();
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
     let pointer = if *target == DisplayTarget::UnderPointer && !crate::window::is_wayland(event_loop) { crate::platform::x11::overlay::pointer_position() } else { None };
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android", target_arch = "wasm32"))]
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "tvos", target_os = "android", target_arch = "wasm32"))]
     let pointer: Option<(i32, i32)> = None;
     let i = crate::overlay::options::choose_display(&bounds, primary, requested, sampled.or(pointer).map(|(x, y)| (f64::from(x), f64::from(y))))?;
     Some(monitors[i].clone())

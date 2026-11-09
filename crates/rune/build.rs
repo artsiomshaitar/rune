@@ -16,6 +16,7 @@ const OUTLINE_BRANCH: &str = "        if i.radii.w > 0.0 {\n            cov = ou
 
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
+    tvos_dispatch_shim();
     // Paths are from the package's folder, where cargo runs this.
     let read = |path: &str| {
         println!("cargo::rerun-if-changed={path}");
@@ -58,4 +59,19 @@ fn main() {
          /// BLAKE3 of [`WINDFOIL`], which Windows and macOS ship bytecode for.\n\
          #[cfg_attr(not(any(target_os = \"macos\", target_os = \"windows\")), allow(dead_code))]\n\
          pub(crate) const WINDFOIL_BLAKE3: &str = \"{windfoil_hash}\";\n"));
+}
+
+/// tvOS only: winit's `objc2-foundation` 0.2 pulls in the `dispatch` crate, which links
+/// `-ldispatch` on every Apple target but macOS and iOS. tvOS has no such library to link;
+/// libdispatch is part of libSystem there. An empty `libdispatch.a` on the link path satisfies
+/// the flag without adding anything, and link paths from here reach every binary using Rune.
+fn tvos_dispatch_shim() {
+    if std::env::var_os("CARGO_CFG_TARGET_OS").is_none_or(|os| os != "tvos") {
+        return;
+    }
+    let Some(out) = std::env::var_os("OUT_DIR") else { return };
+    let dir = Path::new(&out).join("tvos-link");
+    if std::fs::create_dir_all(&dir).is_ok() && std::fs::write(dir.join("libdispatch.a"), b"!<arch>\n").is_ok() {
+        println!("cargo::rustc-link-search=native={}", dir.display());
+    }
 }

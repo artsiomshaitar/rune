@@ -103,7 +103,7 @@ impl<S: 'static> Host<S> {
     /// The first window's startup token (`XDG_ACTIVATION_TOKEN`, `DESKTOP_STARTUP_ID`), which
     /// later windows don't inherit.
     fn startup_token(&self, event_loop: &ActiveEventLoop) -> Option<String> {
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if !self.shown {
             use winit::platform::startup_notify::{EventLoopExtStartupNotify, reset_activation_token_env};
             let token = event_loop.read_token_from_env().map(|t| t.into_raw());
@@ -117,7 +117,7 @@ impl<S: 'static> Host<S> {
     /// Focuses a shown window; Wayland's compositor wants the open's token for that.
     fn activate(&mut self, event_loop: &ActiveEventLoop, token: Option<String>) {
         let Some(w) = self.win.as_mut() else { return };
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if is_wayland(event_loop) {
             match token {
                 Some(token) => {

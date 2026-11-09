@@ -26,7 +26,7 @@ impl<T: 'static> Overlay<T> {
         });
         let active = self.presence.shown() && input != OverlayInput::None && over;
         let want = self.rt.cursor();
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Some(Live { backing: Backing::Layer(layer), .. }) = self.surface.live_mut() {
             layer.set_cursor(if active { want } else { crate::el::Cursor::Default });
             return;
@@ -37,7 +37,7 @@ impl<T: 'static> Overlay<T> {
         if let Some(panel) = &self.panel { panel.set_cursor(active.then_some(want)); }
     }
 
-    #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
+    #[cfg_attr(any(target_os = "ios", target_os = "tvos", target_os = "android"), allow(dead_code))]
     pub(super) fn observe_pointer(&mut self, x: f32, y: f32) {
         if self.rt.pointer_captured() || (x >= 0.0 && y >= 0.0 && x < self.at.size.0 && y < self.at.size.1) {
             self.dirty |= self.rt.observe_pointer(x, y);
@@ -163,7 +163,7 @@ impl<T: 'static> Overlay<T> {
     /// True when a layer surface's input region changed and waits for a commit.
     pub(super) fn publish_regions(&mut self) -> bool {
         // An X11 window's input shape applies at once, with no commit to wait for.
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Some(Live { backing: Backing::Xwayland(surface), .. }) = self.surface.live_mut() {
             surface.regions(self.rt.hit_regions());
             return false;
@@ -173,9 +173,9 @@ impl<T: 'static> Overlay<T> {
         if let Some(panel) = &self.panel { panel.set_regions(self.rt.hit_regions()); }
         #[cfg(target_os = "windows")]
         if let Some(native) = &self.native { native.set_regions(self.rt.hit_regions(), live.scale); }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if self.options.input.resolved(self.interactive) == OverlayInput::Regions && let Some(x11) = &mut self.x11 { x11.regions(self.rt.hit_regions(), live.scale); }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Backing::Layer(layer) = &live.backing { return layer.input_regions(self.rt.hit_regions(), self.interactive); }
         let _ = live;
         false
@@ -188,13 +188,13 @@ impl<T: 'static> Overlay<T> {
         let Some(input) = self.pending_input.take() else { return };
         self.options.input = input;
         let resolved = input.resolved(self.interactive);
-        #[cfg(any(target_arch = "wasm32", target_os = "ios", target_os = "android"))]
+        #[cfg(any(target_arch = "wasm32", target_os = "ios", target_os = "tvos", target_os = "android"))]
         let _ = resolved;
         #[cfg(target_os = "macos")]
         if let Some(panel) = &self.panel { panel.set_input(resolved); }
         #[cfg(target_os = "windows")]
         if let Some(native) = &mut self.native { native.set_input(resolved); }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         {
             if let Some(x11) = &mut self.x11 { x11.set_input(resolved); }
             match self.surface.live_mut() {
@@ -204,7 +204,7 @@ impl<T: 'static> Overlay<T> {
             }
         }
         self.publish_regions();
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Some(Live { backing: Backing::Layer(layer), .. }) = self.surface.live_mut() { layer.commit(); }
     }
 
@@ -393,15 +393,15 @@ impl<T: 'static> Overlay<T> {
             if let Some(panel) = &self.panel { panel.set_follow_pointer(follow); }
             #[cfg(target_os = "windows")]
             if let Some(native) = &mut self.native { native.set_follow_pointer(follow); }
-            #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+            #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
             if let Some(x11) = &self.x11 { x11.set_follow_pointer(follow); }
         }
         let options_changed = requests.placement.is_some() || requests.display.is_some();
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         let recreate_layer = options_changed && matches!(self.surface.live().map(|l| &l.backing), Some(Backing::Layer(_)));
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         let layer_was_visible = self.presence.shown();
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if recreate_layer { self.hide(); }
         if let Some(placement) = requests.placement { self.options.placement = placement; }
         if let Some(display) = requests.display { self.options.display = display; }
@@ -427,12 +427,12 @@ impl<T: 'static> Overlay<T> {
                         self.place_window(event_loop, &w);
                         if let Some(gpu) = self.gpu.clone() { self.rescale(&gpu, crate::window::backing_scale(&w)); }
                     }
-                    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+                    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
                     Some(Backing::Layer(layer)) => {
                         layer.place(at);
                         layer.commit();
                     }
-                    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+                    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
                     Some(Backing::Xwayland(surface)) => surface.place(at, &self.options),
                     None => {}
                 }
@@ -449,7 +449,7 @@ impl<T: 'static> Overlay<T> {
             Some(Visibility::Hide(fade)) => self.hide_fading(fade),
             None => {}
         }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if recreate_layer && self.surface.live().is_none() {
             if layer_was_visible && !matches!(requests.visibility, Some(Visibility::Hide(_))) { self.show_fading(event_loop, Duration::ZERO); }
             else if self.options.prewarm { self.prepare(event_loop, false); }
@@ -463,13 +463,13 @@ impl<T: 'static> Overlay<T> {
             if let Some(panel) = &self.panel { self.shared.native.lock().unwrap().1.global_pointer = panel.global_pointer(); }
             #[cfg(target_os = "windows")]
             if let Some(native) = &self.native { self.shared.native.lock().unwrap().1.global_pointer = native.global_pointer(); }
-            #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+            #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
             if let Some(x11) = &self.x11 { self.shared.native.lock().unwrap().1.global_pointer = x11.global_pointer(); }
         }
         #[cfg(target_os = "macos")]
         if requests.request_keys && self.presence.shown() && self.options.keys == KeyPolicy::OnDemand
             && let Some(panel) = &self.panel { panel.request_keys(); }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if requests.request_keys && self.presence.shown() && self.options.keys == KeyPolicy::OnDemand
             && let Some(Live { backing: Backing::Layer(layer), .. }) = self.surface.live() { layer.request_keys(); }
     }

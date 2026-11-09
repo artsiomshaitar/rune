@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Builds a Rune app for the tvOS simulator, bundles it as an .app with the Info.plist
+# `rune::tvos` needs, signs it ad hoc, and installs and launches it on an Apple TV simulator.
+#   scripts/tvos-app <package> [--release]
+# Env: TVOS_DEVICE (simulator name, default "Rune Apple TV", created from Apple TV 4K (3rd
+# generation) if missing), BUNDLE_ID (default dev.rune.<package>), SHOT=<png> to screenshot the
+# simulator after SHOT_DELAY seconds (default 4), NO_LAUNCH=1 to stop after bundling.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+pkg=${1:?usage: scripts/tvos-app <package> [--release]}
+profile=debug
+flags=()
+if [[ ${2:-} == --release ]]; then profile=release; flags=(--release); fi
+target=aarch64-apple-tvos-sim
+device=${TVOS_DEVICE:-Rune Apple TV}
+bundle_id=${BUNDLE_ID:-dev.rune.$pkg}
+
+cargo build -p "$pkg" --target "$target" ${flags[@]+"${flags[@]}"}
+
+app="${CARGO_TARGET_DIR:-target}/tvos/$pkg.app"
+rm -rf "$app"
+mkdir -p "$app"
+cp "${CARGO_TARGET_DIR:-target}/$target/$profile/$pkg" "$app/$pkg"
+cat > "$app/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key><string>$pkg</string>
+  <key>CFBundleIdentifier</key><string>$bundle_id</string>
+  <key>CFBundleName</key><string>$pkg</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>0.0.1</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleSupportedPlatforms</key><array><string>AppleTVSimulator</string></array>
+  <key>MinimumOSVersion</key><string>17.0</string>
+  <key>UIDeviceFamily</key><array><integer>3</integer></array>
+  <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+  <key>UILaunchScreen</key><dict/>
+  <key>UIApplicationSceneManifest</key>
+  <dict>
+    <key>UIApplicationSupportsMultipleScenes</key><false/>
+    <key>UISceneConfigurations</key>
+    <dict>
+      <key>UIWindowSceneSessionRoleApplication</key>
+      <array><dict>
+        <key>UISceneConfigurationName</key><string>Default</string>
+        <key>UISceneDelegateClassName</key><string>RuneTVSceneDelegate</string>
+      </dict></array>
+    </dict>
+  </dict>
+</dict>
+</plist>
+PLIST
+codesign --force --sign - "$app" >/dev/null
+echo "bundled $app"
+[[ -n ${NO_LAUNCH:-} ]] && exit 0
+
+udid=$(xcrun simctl list devices available -j | python3 -c '
+import json, sys
+name = sys.argv[1]
+for runtime, devices in json.load(sys.stdin)["devices"].items():
+    if "tvOS" in runtime:
+        for d in devices:
+            if d["name"] == name:
+                print(d["udid"]); sys.exit()
+' "$device")
+if [[ -z $udid ]]; then
+  runtime=$(xcrun simctl list runtimes -j | python3 -c '
+import json, sys
+print([r["identifier"] for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "tvOS" and r["isAvailable"]][-1])')
+  udid=$(xcrun simctl create "$device" "Apple TV 4K (3rd generation)" "$runtime")
+fi
+xcrun simctl bootstatus "$udid" -b >/dev/null
+xcrun simctl install "$udid" "$app"
+xcrun simctl terminate "$udid" "$bundle_id" 2>/dev/null || true
+xcrun simctl launch "$udid" "$bundle_id"
+if [[ -n ${SHOT:-} ]]; then
+  sleep "${SHOT_DELAY:-4}"
+  xcrun simctl io "$udid" screenshot "$SHOT" >/dev/null
+  echo "screenshot $SHOT"
+fi

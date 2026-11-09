@@ -60,7 +60,7 @@ impl<T: 'static> Overlay<T> {
         // Only an X11 window waits parked for its surface. A Wayland overlay's window is its
         // surface, and a Windows or macOS one that gives its GPU back is made for each show
         // (`park`): both wait.
-        let parks = cfg!(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"))) && !wayland;
+        let parks = cfg!(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android"))) && !wayland;
         if !surface && !parks { return; }
         self.resolve_size(event_loop);
         let made = if wayland {
@@ -194,7 +194,7 @@ impl<T: 'static> Overlay<T> {
         let Some(live) = self.surface.live() else { return };
         match &live.backing {
             Backing::Window(window) => {
-                #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+                #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
                 if let Some(x11) = &self.x11 { x11.hide(); }
                 #[cfg(target_os = "windows")]
                 {
@@ -212,12 +212,12 @@ impl<T: 'static> Overlay<T> {
                 #[cfg(not(target_os = "windows"))]
                 window.set_visible(false);
             }
-            #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+            #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
             Backing::Layer(_) | Backing::Xwayland(_) => { self.surface.take_live(); }
         }
     }
 
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
     pub(super) fn layer(&mut self, event_loop: &ActiveEventLoop) -> Option<Live> {
         use winit::raw_window_handle::HasDisplayHandle;
         use winit::platform::wayland::MonitorHandleExtWayland;
@@ -244,7 +244,7 @@ impl<T: 'static> Overlay<T> {
         self.attach(Backing::Layer(layer), scale as f32)
     }
 
-    #[cfg(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"))))]
+    #[cfg(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android"))))]
     pub(super) fn layer(&mut self, _event_loop: &ActiveEventLoop) -> Option<Live> {
         None
     }
@@ -264,7 +264,7 @@ impl<T: 'static> Overlay<T> {
         if let Some(p) = position(event_loop, self.at, &self.options) {
             attrs = attrs.with_position(p);
         }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         {
             use winit::platform::x11::{WindowAttributesExtX11, WindowType};
             attrs = attrs.with_override_redirect(true).with_x11_window_type(vec![WindowType::Notification]);
@@ -314,7 +314,7 @@ impl<T: 'static> Overlay<T> {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = window.set_cursor_hittest(self.options.input.resolved(self.interactive) == OverlayInput::All);
-            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "android")))]
+            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
             {
                 self.x11 = crate::platform::x11::overlay::InputWindow::new(&window, self.shared.wake.lock().unwrap().clone(), self.options.input.resolved(self.interactive), self.options.follow_pointer);
                 if self.options.input == OverlayInput::Regions && self.x11.is_none() { return None; }
