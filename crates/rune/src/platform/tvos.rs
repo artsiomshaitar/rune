@@ -49,11 +49,17 @@ use crate::tooling::AppSpec;
 pub struct TvApp<S: 'static> {
     spec: AppSpec<S>,
     menu_exits: Option<fn(&S) -> bool>,
+    render_scale: Option<f64>,
+}
+
+thread_local! {
+    /// `TvApp::render_scale`, read where the view is laid out.
+    static RENDER_SCALE: Cell<Option<f64>> = const { Cell::new(None) };
 }
 
 impl<S: 'static> TvApp<S> {
     pub fn new(spec: AppSpec<S>) -> Self {
-        Self { spec, menu_exits: None }
+        Self { spec, menu_exits: None, render_scale: None }
     }
 
     /// Whether a Menu press goes to the system instead of the app, asked as the press begins.
@@ -64,9 +70,19 @@ impl<S: 'static> TvApp<S> {
         self
     }
 
+    /// Draws at `scale` device pixels per point instead of the screen's own, and lets the
+    /// screen upscale the rest. On an Apple TV 4K, 1.5 draws 2880x1620: just over half the
+    /// pixels of 4K, which buys a frame budget the full resolution can miss, and text stays far
+    /// crisper than at 1080p. The `RUNE_TVOS_SCALE` environment variable overrides it.
+    pub fn render_scale(mut self, scale: f64) -> Self {
+        self.render_scale = Some(scale).filter(|s| s.is_finite() && *s > 0.0);
+        self
+    }
+
     /// Starts UIKit and never returns. Call it from `main` on the main thread.
     pub fn run(self) -> ! {
-        let Self { spec, menu_exits } = self;
+        let Self { spec, menu_exits, render_scale } = self;
+        RENDER_SCALE.with(|cell| cell.set(render_scale));
         FACTORY.with(|f| {
             *f.borrow_mut() = Some(Box::new(move |layer, viewport, scale, wake| {
                 let state = (spec.init)();
@@ -453,6 +469,13 @@ impl Controller {
 /// The scale of the screen showing `view`: 2 on an Apple TV 4K at 4K, 1 at 1080p. `None` before
 /// the view is in a window.
 fn screen_scale(view: &UIView) -> Option<f64> {
+    // `RUNE_TVOS_SCALE=1.5` draws at that scale instead, over `TvApp::render_scale`: for
+    // weighing sharpness against frame time on a given Apple TV.
+    let chosen = std::env::var("RUNE_TVOS_SCALE").ok().and_then(|v| v.parse::<f64>().ok()).filter(|s| *s > 0.0)
+        .or_else(|| RENDER_SCALE.with(Cell::get));
+    if let Some(scale) = chosen {
+        return Some(scale);
+    }
     // SAFETY: `UIView.window`, `UIWindow.screen` and `UIScreen.scale` exist on every tvOS this
     // supports, and this runs on the main thread, in layout.
     unsafe {
