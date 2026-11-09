@@ -50,6 +50,8 @@ pub struct TvApp<S: 'static> {
     spec: AppSpec<S>,
     menu_exits: Option<fn(&S) -> bool>,
     render_scale: Option<f64>,
+    /// `TvApp::compositor`, as the step that attaches it to the host once there is one.
+    attach: Option<Box<dyn FnOnce(LayerHost<S>) -> LayerHost<S>>>,
 }
 
 thread_local! {
@@ -59,7 +61,7 @@ thread_local! {
 
 impl<S: 'static> TvApp<S> {
     pub fn new(spec: AppSpec<S>) -> Self {
-        Self { spec, menu_exits: None, render_scale: None }
+        Self { spec, menu_exits: None, render_scale: None, attach: None }
     }
 
     /// Whether a Menu press goes to the system instead of the app, asked as the press begins.
@@ -80,9 +82,16 @@ impl<S: 'static> TvApp<S> {
         self
     }
 
+    /// Draws each frame through `compositor`, as `App::compositor` does on the desktop: an app's
+    /// own GPU passes at its `El::effect` slots (glass, lenses, glows from rune-fx).
+    pub fn compositor(mut self, compositor: impl crate::compose::Compositor<S>) -> Self {
+        self.attach = Some(Box::new(move |host: LayerHost<S>| host.with_compositor(compositor)));
+        self
+    }
+
     /// Starts UIKit and never returns. Call it from `main` on the main thread.
     pub fn run(self) -> ! {
-        let Self { spec, menu_exits, render_scale } = self;
+        let Self { spec, menu_exits, render_scale, attach } = self;
         RENDER_SCALE.with(|cell| cell.set(render_scale));
         FACTORY.with(|f| {
             *f.borrow_mut() = Some(Box::new(move |layer, viewport, scale, wake| {
@@ -90,6 +99,10 @@ impl<S: 'static> TvApp<S> {
                 // SAFETY: `layer` is the controller's CAMetalLayer, which lives as long as the
                 // app, and this runs on the main thread.
                 let host = unsafe { LayerHost::from_core_animation_layer(layer, &spec, state, viewport, scale, true, wake)? };
+                let host = match attach {
+                    Some(attach) => attach(host),
+                    None => host,
+                };
                 Ok(Box::new(Hosted { host, menu_exits }) as Box<dyn Host>)
             }));
         });
