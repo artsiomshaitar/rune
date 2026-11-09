@@ -432,6 +432,10 @@ pub struct Runtime<S: 'static> {
     zoom: zoom::Zoom,
     /// Transparent native surfaces/headless exports clear to transparent black.
     pub transparent: bool,
+    /// The host clears every frame to [`Runtime::clear_color`], so a plain root fill covering
+    /// the viewport needn't be painted over it again. Off by default: a caller drawing the
+    /// instances itself may clear to anything.
+    pub(crate) root_cleared: bool,
     /// Opt-in gamma-space (sRGB) blending for translucent fills, shadows and blurs.
     pub(crate) srgb_blend: bool,
     pub(crate) native_overlay: bool,
@@ -862,6 +866,7 @@ impl<S: 'static> Runtime<S> {
             viewport,
             zoom: zoom::Zoom { k: 1.0, window: viewport, window_scale: env.scale },
             transparent: false,
+            root_cleared: false,
             srgb_blend: false,
             native_overlay: false,
             surface_stats: None,
