@@ -1074,7 +1074,16 @@ impl<S: 'static> Runtime<S> {
                 } else if apart {
                     if fill[3] > 0.0005 { self.instances.push(border_paint::fill_under(Instance { fill, ..ring }, true)); }
                 } else if fill[3] > 0.0005 || border_a > 0.0005 {
-                    if fill == [0.0; 4] && border_kind == KIND_RECT && bw > 0.0 && sides.is_none() {
+                    // The frame is cleared to the app root's fill (`clear_color`), so a plain,
+                    // opaque, square root fill would paint every pixel a second time in the same
+                    // colour: a whole extra screen of fragments, about 6 ms a frame at 4K on an
+                    // Apple TV.
+                    let covers = r[0] <= 0.0 && r[1] <= 0.0 && r[0] + w >= vp[2] && r[1] + h >= vp[3];
+                    let cleared = self.root_cleared && i == self.app_root() && !self.transparent
+                        && !isolate && border_a <= 0.0005 && fill == base && base[3] >= 1.0
+                        && radii == [0.0; 4] && covers;
+                    if cleared {
+                    } else if fill == [0.0; 4] && border_kind == KIND_RECT && bw > 0.0 && sides.is_none() {
                         bands::push_ring(&mut self.instances, ring);
                     } else {
                         self.instances.push(Instance { fill, ..ring });
