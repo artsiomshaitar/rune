@@ -18,14 +18,14 @@ impl<T: 'static> Overlay<T> {
 
     /// A layer surface kept while hidden (prewarmed, not shown yet) still hears the compositor.
     fn drain_hidden(&mut self) {
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Some(Live { backing: Backing::Layer(layer), .. }) = self.live.as_mut() && layer.drain() {
             self.hide();
         }
     }
 
     /// One input event a layer or XWayland surface read on its own connection.
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
     fn surface_input(&mut self, input: crate::platform::layer_shell::Input) {
         use crate::platform::layer_shell::Input;
         match input {
@@ -62,7 +62,7 @@ impl<T: 'static> Overlay<T> {
 
     pub(super) fn draw_frame(&mut self, prewarm: bool) -> bool {
         let timer = std::mem::take(&mut self.quiet.timer);
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Some(Live { backing: Backing::Layer(layer), .. }) = self.live.as_mut() {
             let changes = layer.dispatch();
             if changes.closed {
@@ -87,7 +87,7 @@ impl<T: 'static> Overlay<T> {
                 self.rescale(&gpu, self.rt.env.scale);
             }
         }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Some(Live { backing: Backing::Xwayland(surface), .. }) = self.live.as_mut() {
             let input = surface.dispatch();
             for input in input { self.surface_input(input); }
@@ -238,12 +238,12 @@ impl<T: 'static> Overlay<T> {
         if let Some(panel) = &self.panel { panel.set_regions(self.rt.hit_regions()); }
         #[cfg(target_os = "windows")]
         if let Some(native) = &self.native { native.set_regions(self.rt.hit_regions(), live.scale); }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if self.options.input == OverlayInput::Regions && let Some(x11) = &mut self.x11 { x11.regions(self.rt.hit_regions(), live.scale); }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Backing::Layer(layer) = &live.backing { layer.input_regions(self.rt.hit_regions(), self.interactive); }
         // An X11 input shape applies at once with no commit; `regions` skips an unchanged shape.
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Backing::Xwayland(surface) = &mut live.backing { surface.regions(self.rt.hit_regions()); }
         let target_format = if self.rt.srgb_blend() { live.config.format.remove_srgb_suffix() } else { live.config.format };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
@@ -306,9 +306,9 @@ impl<T: 'static> Overlay<T> {
         self.clipboard.flush(&mut self.rt);
         // Hit regions paint nothing, so a frame can change only them (a full-screen drawing
         // surface turning on); no presentation follows to commit them.
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if self.publish_regions() && let Some(Live { backing: Backing::Layer(layer), .. }) = &mut self.live { layer.commit(); }
-        #[cfg(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"))))]
+        #[cfg(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android"))))]
         self.publish_regions();
         self.meter.redraw(true);
         self.dirty = false;

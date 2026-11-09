@@ -43,12 +43,12 @@ impl Worker {
         if completed.recv_timeout(Duration::from_millis(250)).is_ok() { let _ = handle.join(); }
     }
 }
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "tvos", target_os = "android")))]
 fn worker() -> &'static mpsc::Sender<Request> {
     &WORKER.get_or_init(|| Worker::spawn(|| arboard::Clipboard::new().ok())).sender
 }
 
-#[cfg(any(target_os = "ios", target_os = "android"))]
+#[cfg(any(target_os = "ios", target_os = "tvos", target_os = "android"))]
 fn worker() -> &'static mpsc::Sender<Request> {
     &WORKER.get_or_init(|| Worker::spawn(|| None::<Board>)).sender
 }
@@ -58,7 +58,7 @@ pub(super) fn shutdown() {
     if let Some(worker) = WORKER.get() { worker.stop(); }
 }
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "tvos", target_os = "android")))]
 impl Backend for arboard::Clipboard {
     fn write(&mut self, copy: &ClipboardWrite) -> Result<(), String> { write(self, copy) }
     fn text(&mut self) -> Option<Zeroizing<String>> { self.get_text().ok().map(Zeroizing::new) }
@@ -76,10 +76,10 @@ impl Backend for arboard::Clipboard {
         let html = windows_read_html().or_else(|| self.get().html().ok()).filter(|h| !h.is_empty() && h.len() <= html::MAX_RICH_BYTES);
         #[cfg(not(target_os = "windows"))]
         let html = self.get().html().ok().filter(|h| !h.is_empty() && h.len() <= html::MAX_RICH_BYTES);
-        #[cfg(any(target_os = "windows", all(unix, not(any(target_os = "ios", target_os = "android")))))]
+        #[cfg(any(target_os = "windows", all(unix, not(any(target_os = "ios", target_os = "tvos", target_os = "android")))))]
         let image = all.then(|| self.get_image().ok()).flatten()
             .and_then(|i| u32::try_from(i.width).ok().zip(u32::try_from(i.height).ok()).and_then(|(w, h)| ClipboardImage::from_rgba(w, h, &i.bytes)));
-        #[cfg(not(any(target_os = "windows", all(unix, not(any(target_os = "ios", target_os = "android"))))))]
+        #[cfg(not(any(target_os = "windows", all(unix, not(any(target_os = "ios", target_os = "tvos", target_os = "android"))))))]
         let image: Option<ClipboardImage> = None;
         let files = if all { self.get().file_list().unwrap_or_default() } else { Vec::new() };
         if text.is_none() && html.is_none() && image.is_none() && files.is_empty() { return None; }
@@ -121,7 +121,7 @@ fn run_worker<B: Backend>(recv: mpsc::Receiver<Request>, mut open: impl FnMut() 
     drop(clipboard);
 }
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "tvos", target_os = "android")))]
 fn write(cb: &mut arboard::Clipboard, copy: &ClipboardWrite) -> Result<(), String> {
     let content = &copy.content;
     if copy.clear_after.is_none() && content.is_rich() {
@@ -135,11 +135,11 @@ fn write(cb: &mut arboard::Clipboard, copy: &ClipboardWrite) -> Result<(), Strin
 
 /// Windows and Linux hold one of Rune's forms per write: the files, else the image, else HTML
 /// beside the text (CF_HTML, `text/html`), else the text. RTF isn't written.
-#[cfg(all(not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+#[cfg(all(not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
 fn write_one_form(cb: &mut arboard::Clipboard, content: &ClipboardContent) -> Result<(), String> {
     let error = |e: arboard::Error| e.to_string();
     if !content.files().is_empty() { return cb.set().file_list(content.files()).map_err(error); }
-    #[cfg(any(target_os = "windows", all(unix, not(any(target_os = "ios", target_os = "android")))))]
+    #[cfg(any(target_os = "windows", all(unix, not(any(target_os = "ios", target_os = "tvos", target_os = "android")))))]
     if let Some(rgba) = content.image().and_then(ClipboardImage::to_rgba) {
         let (width, height) = (rgba.width() as usize, rgba.height() as usize);
         return cb.set_image(arboard::ImageData { width, height, bytes: rgba.into_raw().into() }).map_err(error);
@@ -150,7 +150,7 @@ fn write_one_form(cb: &mut arboard::Clipboard, content: &ClipboardContent) -> Re
     }
 }
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "tvos", target_os = "android")))]
 fn write_text(cb: &mut arboard::Clipboard, copy: &ClipboardWrite) -> Result<(), arboard::Error> {
     let text = copy.content.text();
     if copy.clear_after.is_none() { return cb.set_text(text); }
@@ -158,13 +158,13 @@ fn write_text(cb: &mut arboard::Clipboard, copy: &ClipboardWrite) -> Result<(), 
     { use arboard::SetExtApple; return cb.set().exclude_from_history().text(text); }
     #[cfg(target_os = "windows")]
     { use arboard::SetExtWindows; return cb.set().exclude_from_monitoring().text(text); }
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
     { use arboard::SetExtLinux; return cb.set().exclude_from_history().text(text); }
     #[allow(unreachable_code)]
     cb.set_text(text)
 }
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "tvos", target_os = "android")))]
 fn revision() -> Option<u64> {
     #[cfg(target_os = "macos")]
     { return Some(unsafe { objc2_app_kit::NSPasteboard::generalPasteboard().changeCount() } as u64); }

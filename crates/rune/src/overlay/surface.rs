@@ -9,7 +9,7 @@ impl<T: 'static> Overlay<T> {
         // First, before the surface binds the view (macOS may observe it).
         let a11y = self.shared.wake.lock().unwrap().clone().and_then(|wake| match &backing {
             Backing::Window(window) => crate::a11y::Adapter::new(window, wake),
-            #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+            #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
             Backing::Layer(_) | Backing::Xwayland(_) => crate::a11y::Adapter::windowless(wake),
         });
         #[cfg(target_os = "macos")]
@@ -31,7 +31,7 @@ impl<T: 'static> Overlay<T> {
                     }
                     instance.create_surface(w.clone()).ok()
                 }
-                #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+                #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
                 Backing::Layer(layer) => {
                     let (display, window) = layer.raw_handles();
                     // SAFETY: the layer surface outlives this wgpu surface (`Live` drops the
@@ -44,7 +44,7 @@ impl<T: 'static> Overlay<T> {
                     }
                     .ok()
                 }
-                #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+                #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
                 Backing::Xwayland(surface) => {
                     let (display, window) = surface.raw_handles()?;
                     // SAFETY: the X window and its connection outlive this wgpu surface (`Live`
@@ -207,7 +207,7 @@ impl<T: 'static> Overlay<T> {
         self.panel.take();
         #[cfg(target_os = "windows")]
         self.native.take();
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         self.x11.take();
         drop(backing);
         self.announced = false;

@@ -21,6 +21,7 @@ members = [
     "crates/rune-taffy",
     "themes/opencode",
     "examples/hello",
+    "examples/tvos-hello",
     "examples/web-hello",
     "examples/web-showcase",
     "www/app",
@@ -54,7 +55,7 @@ members = [
     "examples/site-scenes",
     "examples/luau-panel",
 ]
-exclude = ["tools/rune-dev-guard"]
+exclude = ["tools/rune-dev-guard", "vendor/winit"]
 
 [workspace.package]
 edition = "2024"
@@ -113,3 +114,4 @@ unwrap_used = "warn"
 undocumented_unsafe_blocks = "warn" # shared: deny; errors left
 let_underscore_must_use = "warn" # shared: deny; errors left
 disallowed_methods = "warn" # shared: deny; errors left
+

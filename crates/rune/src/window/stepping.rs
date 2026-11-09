@@ -42,7 +42,7 @@ impl<S: 'static> Host<S> {
             return;
         }
         let reveal = w.first_frame.complete();
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if self.float_on_open && !w.first_frame.notified { float_on_open::release(&w.window, &self.options, self.spec.min_size); }
         self.native_handle.native.ready.store(true, Ordering::Release);
         *self.shared.window_error.lock().unwrap() = None;

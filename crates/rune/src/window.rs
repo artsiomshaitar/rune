@@ -71,7 +71,7 @@ pub(crate) use pacing::{HIDDEN_REFRESH, TIMER_FRAME_STALL};
 #[cfg(test)]
 use pacing::wall_wake_deadline;
 mod stepping;
-#[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+#[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
 mod float_on_open;
 #[cfg(not(target_arch = "wasm32"))]
 pub use event_loop::run;
@@ -405,7 +405,7 @@ struct Host<S: 'static> {
     release_gpu: bool,
     open_at_start: bool,
     /// `App::float_on_open`: each window maps at a fixed size, then takes its own limits.
-    #[cfg_attr(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"))), allow(dead_code))]
+    #[cfg_attr(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android"))), allow(dead_code))]
     float_on_open: bool,
     /// `App::open_inactive`: the first open leaves focus where it is.
     open_inactive: bool,
@@ -711,9 +711,9 @@ pub(crate) fn rebuild_renderer<S: 'static>(device: &wgpu::Device, renderer: &mut
 }
 
 pub(crate) fn is_wayland(event_loop: &ActiveEventLoop) -> bool {
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
     return winit::platform::wayland::ActiveEventLoopExtWayland::is_wayland(event_loop);
-    #[cfg(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"))))]
+    #[cfg(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android"))))]
     {
         let _ = event_loop;
         false

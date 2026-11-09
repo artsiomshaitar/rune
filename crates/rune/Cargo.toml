@@ -63,8 +63,8 @@ rune-staging = { path = "../rune-staging" }
 rune-taffy = { path = "../rune-taffy" }
 # Allow backend patch fixes; headless pixel equivalence guards the precompiled Metal path.
 wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
-# Keep Wayland client-side frames/buttons without the title font's ab_glyph/ttf-parser.
-winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita-notitle"] }
+# winit 0.30.13 with tvOS treated as iOS (vendor/winit/VENDORED.md).
+winit = { path = "../../vendor/winit", version = "0.30.13", default-features = false, features = ["rwh_06"] }
 taffy = { version = "0.15", default-features = false, features = ["std", "taffy_tree", "flexbox", "grid", "block_layout", "content_size"] }
 parley = { version = "0.12", default-features = false, features = ["std"] }
 swash = "0.2.10"
@@ -96,11 +96,11 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 # keeps system fonts off. Fontconfig opens at run time, so a build needs no headers for it.
 fontique = { version = "0.12", default-features = false, features = ["std", "system", "fontconfig-dlopen"] }
 
-[target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
+[target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))'.dependencies]
 arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
 
 # Pasted images on Windows and Linux; macOS reads the pasteboard's PNG or TIFF itself.
-[target.'cfg(any(target_os = "windows", all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android")))))'.dependencies]
+[target.'cfg(any(target_os = "windows", all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "tvos", target_os = "android")))))'.dependencies]
 arboard = { version = "3.6", default-features = false, features = ["wayland-data-control", "image-data"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -129,6 +129,12 @@ wgpu-naga-bridge = { version = "~30.0.1", optional = true }
 wgpu = { version = "~30.0.1", default-features = false, features = ["custom"] }
 objc2-foundation-video = { package = "objc2-foundation", version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSError", "NSObject", "NSRange", "NSString", "NSURL", "NSURLConnection", "NSURLRequest", "NSURLResponse"] }
 
+# The tvOS shell (`rune::tvos`): a UIKit scene, its view controller, a `CAMetalLayer` and the
+# display link that drives it.
+[target.'cfg(target_os = "tvos")'.dependencies]
+objc2-ui-kit = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "objc2-quartz-core", "UIApplication", "UIEvent", "UIPress", "UIPressesEvent", "UIResponder", "UIScene", "UISceneDefinitions", "UISceneOptions", "UIScreen", "UITouch", "UIView", "UIViewController", "UIWindow", "UIWindowScene"] }
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "bitflags", "CALayer", "CAMetalLayer", "CADisplayLink", "CATransaction", "objc2-core-foundation"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 accesskit_macos = { version = "0.27.2", optional = true }
 # Names for the interaction watchdog's stack samples (`tooling::interaction::stack`).
@@ -151,7 +157,9 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = ["
 symphonia = { version = "0.5.5", optional = true, default-features = false, features = ["ogg", "vorbis", "mkv"] }
 opuscule = { version = "0.2.2", optional = true }
 
-[target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
+[target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))'.dependencies]
+# Keep Wayland client-side frames/buttons without the title font's ab_glyph/ttf-parser.
+winit = { path = "../../vendor/winit", version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita-notitle"] }
 raw-window-handle = "0.6"
 wayland-backend = { version = "0.3", features = ["client_system"] }
 wayland-client = "0.31"

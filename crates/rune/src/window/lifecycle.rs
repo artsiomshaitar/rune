@@ -335,7 +335,7 @@ impl<S: 'static> Host<S> {
         // The launcher's startup token belongs to the first window only.
         #[allow(unused_mut)]
         let mut from_env = None;
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if !self.shown {
             use winit::platform::startup_notify::{EventLoopExtStartupNotify, reset_activation_token_env};
             from_env = event_loop.read_token_from_env().map(|t| t.into_raw());
@@ -366,7 +366,7 @@ impl<S: 'static> Host<S> {
         self.rt.set_live_visible(true);
         self.rt.cancel_timer_frame();
         self.native_handle.native.number.store(native_window_number(&w.window).unwrap_or(0), Ordering::Release);
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if is_wayland(event_loop) {
             match token {
                 Some(token) => {

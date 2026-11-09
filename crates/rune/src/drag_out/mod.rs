@@ -30,7 +30,7 @@ pub(crate) const SUPPORTED: bool = cfg!(target_os = "macos");
 
 /// Pointer travel (points, straight-line) from the press before a drag session starts.
 /// AppKit views commonly use 4; GTK's default is 8; Windows' `SM_CXDRAG` is 4 pixels.
-pub const DRAG_THRESHOLD: f32 = if cfg!(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"))) { 8.0 } else { 4.0 };
+pub const DRAG_THRESHOLD: f32 = if cfg!(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android"))) { 8.0 } else { 4.0 };
 
 /// Whether a pointer that went down at `from` and is now at `to` has travelled past
 /// `threshold` points. [`crate::El::drag_threshold`] sets it per element.

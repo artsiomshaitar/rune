@@ -136,7 +136,7 @@ struct Place {
 
 impl Place {
     fn at(base: PathBuf) -> Place { Place { base, tail: None } }
-    #[cfg_attr(any(target_arch = "wasm32", target_os = "macos", target_os = "ios"), allow(dead_code))]
+    #[cfg_attr(any(target_arch = "wasm32", target_os = "macos", target_os = "ios", target_os = "tvos"), allow(dead_code))]
     fn nested(base: PathBuf, tail: &'static str) -> Place { Place { base, tail: Some(tail) } }
     fn path(&self, id: &str) -> PathBuf {
         let dir = self.base.join(id);
@@ -198,7 +198,7 @@ impl Bases {
     #[cfg(target_arch = "wasm32")]
     fn platform(_set: &impl Fn(&str) -> Option<PathBuf>, _home: Option<PathBuf>) -> Option<Bases> { None }
 
-    #[cfg(all(not(target_arch = "wasm32"), any(target_os = "macos", target_os = "ios")))]
+    #[cfg(all(not(target_arch = "wasm32"), any(target_os = "macos", target_os = "ios", target_os = "tvos")))]
     fn platform(_set: &impl Fn(&str) -> Option<PathBuf>, home: Option<PathBuf>) -> Option<Bases> {
         let library = home.as_ref()?.join("Library");
         let support = library.join("Application Support");
@@ -231,7 +231,7 @@ impl Bases {
         })
     }
 
-    #[cfg(all(not(target_arch = "wasm32"), not(any(target_os = "macos", target_os = "ios", target_os = "windows"))))]
+    #[cfg(all(not(target_arch = "wasm32"), not(any(target_os = "macos", target_os = "ios", target_os = "tvos", target_os = "windows"))))]
     fn platform(set: &impl Fn(&str) -> Option<PathBuf>, home: Option<PathBuf>) -> Option<Bases> {
         let xdg = |k: &str, fallback: &[&str]| {
             set(k).filter(|p| p.is_absolute()).or_else(|| home.as_ref().map(|h| fallback.iter().fold(h.clone(), |p, part| p.join(part))))

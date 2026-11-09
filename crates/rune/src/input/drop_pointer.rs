@@ -8,13 +8,13 @@ use winit::window::Window;
 #[derive(Default)]
 pub(crate) struct DropPointer {
     /// A connection kept for the drag, so sampling 60 times a second doesn't reconnect.
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
     x11: Option<(x11rb::rust_connection::RustConnection, u32)>,
 }
 
 impl DropPointer {
     pub(crate) fn new() -> Self {
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         return Self {
             x11: x11rb::connect(None).ok().and_then(|(c, screen)| {
                 use x11rb::connection::Connection as _;
@@ -43,7 +43,7 @@ impl DropPointer {
             let (x, y) = crate::platform::win32::pointer_position()?;
             return screen_to_window(window, (x, y));
         }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         {
             use x11rb::protocol::xproto::ConnectionExt as _;
             let (c, root) = self.x11.as_ref()?;
@@ -57,7 +57,7 @@ impl DropPointer {
 
 /// A screen point in physical pixels, in `window`'s content in points. `None` when the window
 /// can't say where it is (Wayland, including an X11 connection under XWayland).
-#[cfg(any(target_os = "windows", all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"))))]
+#[cfg(any(target_os = "windows", all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android"))))]
 fn screen_to_window(window: &Window, (x, y): (i32, i32)) -> Option<(f32, f32)> {
     let origin = window.inner_position().ok()?;
     let scale = window.scale_factor() as f32;

@@ -91,7 +91,7 @@ impl<T: 'static> AnyHost for Overlay<T> {
             self.sync_live_origin();
         }
         if !self.visible { return; }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. })
             && let Some(x11) = &self.x11 { x11.update_geometry(); }
         match event {
@@ -167,7 +167,7 @@ impl<T: 'static> AnyHost for Overlay<T> {
             let more = self.draw();
             return self.a11y_turn() || more;
         }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         if let Some(live) = &self.live && let Some(x11) = &self.x11 && let Some((point, desktop)) = x11.take_pointer(live.scale) {
             self.observe_pointer(point.0, point.1);
             self.follow_pointer(_event_loop, desktop);

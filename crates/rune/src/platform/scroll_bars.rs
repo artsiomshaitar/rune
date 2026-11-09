@@ -28,12 +28,12 @@ impl ScrollBars {
     /// overlay scrollers (`NSScroller.preferredScrollerStyle == .overlay` on macOS). iOS always
     /// uses overlay scroll bars.
     pub const fn is_overlay(self, scroller_overlay: bool) -> bool {
-        #[cfg(target_os = "ios")]
+        #[cfg(any(target_os = "ios", target_os = "tvos"))]
         {
             let _ = scroller_overlay;
             return true;
         }
-        #[cfg(not(target_os = "ios"))]
+        #[cfg(not(any(target_os = "ios", target_os = "tvos")))]
         match self {
             Self::Automatic => scroller_overlay,
             Self::WhenScrolling => true,
@@ -245,7 +245,7 @@ mod tests {
         assert!(SystemScrollBars::DEFAULT.is_overlay());
         assert!(ScrollBars::WhenScrolling.is_overlay(false));
         assert!(ScrollBars::WhenScrolling.is_overlay(true));
-        #[cfg(not(target_os = "ios"))]
+        #[cfg(not(any(target_os = "ios", target_os = "tvos")))]
         {
             assert!(!ScrollBars::Always.is_overlay(true));
             assert!(!ScrollBars::Always.is_overlay(false));

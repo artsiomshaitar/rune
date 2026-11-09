@@ -253,11 +253,11 @@ mod tests {
         let env = |pairs: &'static [(&str, &str)]| move |k: &str| pairs.iter().find(|p| p.0 == k).map(|p| p.1.into());
         assert_eq!(config_dir(env(&[("RUNE_PREFS_DIR", "/scratch"), ("HOME", "/home/x")])), Some(PathBuf::from("/scratch")));
         assert_eq!(config_dir(env(&[])), None);
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "tvos"))]
         assert_eq!(config_dir(env(&[("HOME", "/h")])), Some(PathBuf::from("/h/Library/Application Support")));
         #[cfg(target_os = "windows")]
         assert_eq!(config_dir(env(&[("APPDATA", "C:\\Roaming")])), Some(PathBuf::from("C:\\Roaming")));
-        #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
+        #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "tvos"))))]
         {
             assert_eq!(config_dir(env(&[("HOME", "/h")])), Some(PathBuf::from("/h/.config")));
             assert_eq!(config_dir(env(&[("HOME", "/h"), ("XDG_CONFIG_HOME", "/xdg")])), Some(PathBuf::from("/xdg")));

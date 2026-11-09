@@ -4,7 +4,7 @@
 use super::*;
 
 impl<S: 'static> Host<S> {
-    #[cfg_attr(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"))), allow(unused_variables))]
+    #[cfg_attr(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android"))), allow(unused_variables))]
     pub(super) fn try_create(&mut self, event_loop: &ActiveEventLoop, token: Option<String>, focus: bool) -> Result<(), String> {
         // A released window reopens at the height its content reached while it was gone.
         let built = self.shown && self.build_for_show();
@@ -15,7 +15,7 @@ impl<S: 'static> Host<S> {
         let mut attrs = self.options.attributes(self.rt.window_title.current().unwrap_or(self.spec.title), size, self.spec.min_size, visible).with_active(focus);
         #[cfg(target_os = "macos")]
         if self.macos_window.nonactivating_panel { attrs = attrs.with_visible(false).with_active(false); }
-        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "tvos"), not(target_os = "android")))]
         {
             if let Some(id) = crate::tooling::app_id() {
                 attrs = winit::platform::wayland::WindowAttributesExtWayland::with_name(attrs, id, id);
