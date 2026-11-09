@@ -750,7 +750,9 @@ impl Renderer {
     }
 
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Renderer {
-        Self::create(device, format, None, cfg!(target_os = "macos"))
+        // tvOS too: Apple TV GPUs pay for Windfoil's larger shader on every fragment, and tvOS
+        // text defaults to `FontSmoothing::Off`, which never asks for outlines.
+        Self::create(device, format, None, cfg!(any(target_os = "macos", target_os = "tvos")))
     }
 
     pub fn set_srgb_blend(&mut self, enabled: bool) {
