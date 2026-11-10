@@ -26,6 +26,12 @@
 //! Menu goes to the app as Escape. A Menu press the system should take instead, which on the
 //! app's first screen sends it to the Home screen as Apple's guidelines ask, is the app's to
 //! say: [`TvApp::menu_exits`].
+//!
+//! A native layer can sit under the app's, filling the screen: [`set_underlay`] with an
+//! `AVPlayerLayer` plays video beneath controls the app draws in Rune. While one is there the
+//! app's layer is transparent wherever it draws nothing, and hidden while it draws nothing at all.
+//! Then an element marked `El::system_material` gets a native `UIVisualEffectView` between the
+//! two, at its frame, corner radius, opacity and clip, so the system blurs the video under it.
 use std::cell::{Cell, OnceCell, RefCell};
 use std::ffi::{CString, c_char, c_void};
 use std::ptr::NonNull;
@@ -33,7 +39,7 @@ use std::sync::Arc;
 
 use objc2_core_foundation::{CGPoint, CGRect};
 use objc2_foundation_video::{NSObject, NSObjectProtocol, NSString};
-use objc2_quartz_core::{CADisplayLink, CAMetalLayer, CATransaction};
+use objc2_quartz_core::{CADisplayLink, CALayer, CAMetalLayer, CATransaction};
 #[allow(deprecated)]
 use objc2_ui_kit::{UIApplicationDelegate, UISceneDelegate, UIWindowSceneDelegate, UIApplicationMain, UIPress, UIPressType, UIResponder, UITouch, UIView, UIViewController};
 use objc2_video::rc::Retained;
@@ -43,7 +49,29 @@ use objc2_video::{ClassType, DefinedClass, Message, MainThreadMarker, MainThread
 use crate::embed::{EmbedFrame, LayerHost};
 use crate::remote::{Button, Input};
 use crate::runtime::Waker;
+use crate::system_material::uikit::Materials;
 use crate::tooling::AppSpec;
+
+/// Puts `layer` (a `CALayer *`) under the app's own, filling the screen, in place of the one
+/// there before; null takes it away. A raw pointer, as [`LayerHost::from_core_animation_layer`]
+/// takes one, so no Objective-C binding's version is part of this API. While a layer is there the app's layer is transparent
+/// ([`LayerHost::set_transparent`]): the app leaves its root unfilled where the layer should
+/// show, and when it draws nothing at all its layer is hidden, so the screen shows the underlay
+/// alone. Call it on the main thread, as `init`, `poll` and `on_key` run, any time after
+/// [`TvApp::run`] starts.
+///
+/// # Safety
+/// `layer` is null or points to a live Objective-C object.
+///
+/// # Panics
+/// Off the main thread, or when `layer` isn't a `CALayer`.
+pub unsafe fn set_underlay(layer: *mut std::ffi::c_void) {
+    assert!(MainThreadMarker::new().is_some(), "rune::tvos::set_underlay runs on the main thread");
+    // SAFETY: the caller's promise: null, or a live object.
+    let layer = unsafe { layer.cast::<AnyObject>().as_ref() };
+    let layer = layer.map(|l| l.downcast_ref::<CALayer>().expect("rune::tvos::set_underlay takes a CALayer").retain());
+    with_controller(|c| c.set_underlay(layer));
+}
 
 /// A Rune app run as the whole tvOS app. Build it from the same [`AppSpec`] a desktop app runs.
 pub struct TvApp<S: 'static> {
@@ -120,10 +148,12 @@ impl<S: 'static> TvApp<S> {
 }
 
 trait Host {
-    fn frame(&mut self) -> EmbedFrame;
+    /// One frame, with `materials` placed for its material elements when `native`.
+    fn frame(&mut self, materials: Option<&mut Materials>, native: bool) -> EmbedFrame;
     fn resize(&mut self, viewport: (f32, f32), scale: f32);
     fn remote(&mut self, input: Input);
     fn menu_exits(&self) -> bool;
+    fn set_transparent(&mut self, on: bool) -> bool;
 }
 
 struct Hosted<S: 'static> {
@@ -132,10 +162,14 @@ struct Hosted<S: 'static> {
 }
 
 impl<S: 'static> Host for Hosted<S> {
-    fn frame(&mut self) -> EmbedFrame { self.host.frame() }
+    fn frame(&mut self, materials: Option<&mut Materials>, native: bool) -> EmbedFrame {
+        self.host.set_native_materials(native && materials.is_some());
+        self.host.frame_with(materials.map(|m| m as &mut dyn crate::system_material::NativeHost))
+    }
     fn resize(&mut self, viewport: (f32, f32), scale: f32) { self.host.resize(viewport, scale) }
     fn remote(&mut self, input: Input) { self.host.remote(input) }
     fn menu_exits(&self) -> bool { self.menu_exits.is_some_and(|f| f(&self.host.runtime().state)) }
+    fn set_transparent(&mut self, on: bool) -> bool { self.host.set_transparent(on) }
 }
 
 type Factory = Box<dyn FnOnce(*mut c_void, (f32, f32), f32, Waker) -> Result<Box<dyn Host>, String>>;
@@ -275,6 +309,15 @@ struct ControllerIvars {
     background: Cell<bool>,
     /// The Menu press that began went to the system, so its end goes there too.
     menu_to_system: Cell<bool>,
+    /// `set_underlay`'s layer, under `layer`.
+    underlay: RefCell<Option<Retained<CALayer>>>,
+    /// Whether the host draws transparent, which follows `underlay` from the next frame.
+    see_through: Cell<bool>,
+    /// Native views for material elements, between `underlay` and `layer`.
+    materials: RefCell<Option<Materials>>,
+    /// The latest timer wake `draw` asked for; an earlier one that fires finds a newer number
+    /// here and does nothing, or every frame's wake would go on waking the app.
+    wake: Cell<u64>,
 }
 
 define_class!(
@@ -297,6 +340,7 @@ define_class!(
                 let root: Retained<AnyObject> = msg_send![&*view, layer];
                 let _: () = msg_send![&*root, addSublayer: &*layer];
             }
+            *self.ivars().materials.borrow_mut() = Materials::new(&view, &layer);
             if self.ivars().layer.set(layer).is_err() { return }
             // SAFETY: the target answers `runeTick:`; the link retains it for the app's life.
             let link = unsafe { CADisplayLink::displayLinkWithTarget_selector(self, sel!(runeTick:)) };
@@ -344,7 +388,7 @@ define_class!(
                         self.ivars().menu_to_system.set(true);
                         system = true;
                     }
-                    Some(Button::PlayPause) | None => system = true,
+                    None => system = true,
                     Some(b) => self.input(Input::Press(b)),
                 }
             }
@@ -358,7 +402,7 @@ define_class!(
             for press in set_items::<UIPress>(presses) {
                 match button(&press) {
                     Some(Button::Menu) if self.ivars().menu_to_system.replace(false) => system = true,
-                    Some(Button::PlayPause) | None => system = true,
+                    None => system = true,
                     Some(b) => self.input(Input::Release(b)),
                 }
             }
@@ -420,6 +464,10 @@ impl Controller {
             link: OnceCell::new(),
             background: Cell::new(false),
             menu_to_system: Cell::new(false),
+            underlay: RefCell::new(None),
+            see_through: Cell::new(false),
+            materials: RefCell::new(None),
+            wake: Cell::new(0),
         });
         // SAFETY: UIViewController's designated init with no nib.
         unsafe { msg_send![super(this), initWithNibName: None::<&AnyObject>, bundle: None::<&AnyObject>] }
@@ -441,6 +489,7 @@ impl Controller {
         CATransaction::setDisableActions(true);
         layer.setFrame(CGRect { origin: CGPoint::ZERO, size: bounds.size });
         layer.setContentsScale(scale as f64);
+        if let Some(underlay) = &*self.ivars().underlay.borrow() { underlay.setFrame(bounds) }
         CATransaction::commit();
         if with_host(|h| h.resize(viewport, scale)).is_none() {
             open_host(layer, viewport, scale);
@@ -460,6 +509,25 @@ impl Controller {
         Some((p.x as f32, p.y as f32))
     }
 
+    fn set_underlay(&self, layer: Option<Retained<CALayer>>) {
+        let Some(view) = self.view() else { return };
+        CATransaction::begin();
+        CATransaction::setDisableActions(true);
+        if let Some(old) = self.ivars().underlay.take() { old.removeFromSuperlayer() }
+        if let Some(layer) = &layer {
+            layer.setFrame(view.bounds());
+            view.layer().insertSublayer_atIndex(layer, 0);
+        }
+        CATransaction::commit();
+        *self.ivars().underlay.borrow_mut() = layer;
+        self.resume();
+    }
+
+    /// Whether the host's transparency is behind `underlay`'s, and a frame is still to show it.
+    fn see_through_stale(&self) -> bool {
+        self.ivars().underlay.borrow().is_some() != self.ivars().see_through.get()
+    }
+
     fn resume(&self) {
         if self.ivars().background.get() { return }
         if let Some(link) = self.ivars().link.get() { link.setPaused(false) }
@@ -471,11 +539,26 @@ impl Controller {
     }
 
     fn draw(&self) {
-        let Some(frame) = with_host(|h| h.frame()) else { return };
-        if frame.animating { return }
-        if let Some(link) = self.ivars().link.get() { link.setPaused(true) }
+        let ivars = self.ivars();
+        if self.see_through_stale() {
+            let on = !ivars.see_through.get();
+            if with_host(|h| h.set_transparent(on)).is_some() { ivars.see_through.set(on) }
+        }
+        let mut materials = ivars.materials.borrow_mut();
+        let native = ivars.see_through.get() && materials.as_ref().is_some_and(Materials::enabled);
+        let Some(frame) = with_host(|h| h.frame(materials.as_mut(), native)) else { return };
+        drop(materials);
+        if let Some(layer) = ivars.layer.get().filter(|_| frame.drew) {
+            let hidden = ivars.see_through.get() && frame.blank;
+            if layer.isHidden() != hidden { layer.setHidden(hidden) }
+        }
+        // An underlay set from this frame's `poll` or `on_key` is seen through from the next.
+        if frame.animating || self.see_through_stale() { return }
+        if let Some(link) = ivars.link.get() { link.setPaused(true) }
+        let wake = ivars.wake.get() + 1;
+        ivars.wake.set(wake);
         if let Some(after) = frame.wake_after_secs {
-            crate::platform::main_queue::on_main_after(after, || with_controller(Controller::resume));
+            crate::platform::main_queue::on_main_after(after, move || with_controller(|c| if c.ivars().wake.get() == wake { c.resume() }));
         }
     }
 }

@@ -1,0 +1,15 @@
+[package]
+name = "tvos-video"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rune = { path = "../../crates/rune" }
+
+[target.'cfg(target_os = "tvos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSURL"] }
+
+[lints]
+workspace = true

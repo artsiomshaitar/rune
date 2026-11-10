@@ -19,7 +19,7 @@ fn buttons_send_their_keys() {
     assert_eq!(Button::Menu.key(), Some(Key::Escape));
     assert_eq!(Button::Left.key(), Some(Key::Left));
     assert_eq!(Button::PageDown.key(), Some(Key::PageDown));
-    assert_eq!(Button::PlayPause.key(), None);
+    assert_eq!(Button::PlayPause.key(), Some(Key::PlayPause));
 }
 
 #[test]
@@ -65,11 +65,11 @@ fn a_new_press_makes_the_old_timer_stale() {
 }
 
 #[test]
-fn select_and_menu_never_repeat() {
+fn select_menu_and_play_pause_never_repeat() {
     let mut r = Remote::new();
     assert_eq!(steps(r.step(Input::Press(Button::Select), 0.0)), [Effect::Key(ev(Key::Text(" ".into())))]);
     assert_eq!(steps(r.step(Input::Press(Button::Menu), 0.0)), [Effect::Key(ev(Key::Escape))]);
-    assert!(steps(r.step(Input::Press(Button::PlayPause), 0.0)).is_empty());
+    assert_eq!(steps(r.step(Input::Press(Button::PlayPause), 0.0)), [Effect::Key(ev(Key::PlayPause))]);
 }
 
 #[test]

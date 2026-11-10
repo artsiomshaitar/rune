@@ -51,6 +51,8 @@ pub enum Key {
     ScrollLock,
     /// Pause (Break). Text fields ignore it; apps can bind it.
     Pause,
+    /// A media Play/Pause button, as the Siri Remote's. Text fields ignore it; a player binds it.
+    PlayPause,
     Escape,
     Tab,
     /// Any character typed with Cmd (Ctrl off macOS), lowercased: a letter ("a", "c", "v"), a
