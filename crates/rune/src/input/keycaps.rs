@@ -145,6 +145,7 @@ fn key_label(ev: &KeyEvent) -> (String, bool) {
         Key::PrintScreen => "PrtSc".into(),
         Key::ScrollLock => "ScrLk".into(),
         Key::Pause => "Pause".into(),
+        Key::PlayPause => "Play/Pause".into(),
         Key::Escape => "⎋".into(),
         Key::Tab => "⇥".into(),
         Key::Function(n) => format!("F{n}"),

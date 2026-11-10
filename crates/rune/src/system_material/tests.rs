@@ -5,7 +5,8 @@ use bytemuck::Zeroable;
 
 #[test]
 fn native_frames_are_points_from_the_top_left() {
-    let draw = MaterialDraw { id: NodeId(1), material: SystemMaterial::Glass, rect: [20.0, 40.0, 200.0, 100.0], radius: 24.0, continuous: false, opacity: 1.0 };
+    let draw = MaterialDraw { id: NodeId(1), material: SystemMaterial::Glass, rect: [20.0, 40.0, 200.0, 100.0], radius: 24.0, continuous: false, opacity: 1.0,
+        clip: crate::render::NO_CLIP, fade: [0.0; 4], fade_origin: crate::render::NO_CLIP };
     assert_eq!(draw.points(2.0), ([10.0, 20.0, 100.0, 50.0], 12.0));
     assert_eq!(draw.points(1.0), ([20.0, 40.0, 200.0, 100.0], 24.0));
 }
@@ -308,4 +309,113 @@ fn srgb_blend_frost_over_a_native_material_reads_as_core_animation() {
     near(read(true, 1, black), [158, 158, 158, 255]);
     near(read(true, 1, [0.0; 4]), [158, 158, 158, 158]);
     near(read(true, 0, [0.0; 4]), [0, 0, 0, 0]);
+}
+
+fn draw(rect: [f32; 4], clip: [f32; 4], fade: [f32; 4], fade_origin: [f32; 4], opacity: f32) -> MaterialDraw {
+    MaterialDraw { id: NodeId(1), material: SystemMaterial::Popover, rect, radius: 0.0, continuous: false, opacity, clip, fade, fade_origin }
+}
+
+fn near(got: &[[f64; 2]], want: &[[f64; 2]]) {
+    assert_eq!(got.len(), want.len(), "{got:?} != {want:?}");
+    assert!(got.iter().zip(want).all(|(g, w)| (g[0] - w[0]).abs() < 1e-3 && (g[1] - w[1]).abs() < 1e-3), "{got:?} != {want:?}");
+}
+
+#[test]
+fn an_unclipped_opaque_view_takes_no_mask() {
+    use crate::render::NO_CLIP;
+    let d = draw([10.0, 20.0, 100.0, 50.0], NO_CLIP, [0.0; 4], NO_CLIP, 1.0);
+    assert_eq!(d.mask(), (None, None));
+    assert_eq!(d.faded_mask(), None);
+    // A clip the view sits wholly inside leaves it whole too.
+    assert_eq!(draw([10.0, 20.0, 100.0, 50.0], [10.0, 20.0, 110.0, 70.0], [0.0; 4], NO_CLIP, 1.0).mask(), (None, None));
+}
+
+#[test]
+fn a_hard_clip_is_two_stops_at_one_place() {
+    use crate::render::NO_CLIP;
+    let d = draw([0.0, 100.0, 200.0, 100.0], [-1e6, -1e6, 1e6, 150.0], [0.0; 4], NO_CLIP, 1.0);
+    let (across, down) = d.mask();
+    assert_eq!(across, None);
+    near(&down.unwrap(), &[[0.0, 1.0], [0.5, 1.0], [0.5, 0.0], [1.0, 0.0]]);
+    // Cut on the left by a quarter.
+    let (across, _) = draw([0.0, 0.0, 200.0, 100.0], [50.0, -1e6, 1e6, 1e6], [0.0; 4], NO_CLIP, 1.0).mask();
+    near(&across.unwrap(), &[[0.0, 0.0], [0.25, 0.0], [0.25, 1.0], [1.0, 1.0]]);
+}
+
+#[test]
+fn a_linear_soft_edge_is_one_ramp_and_a_smooth_one_eases() {
+    let rect = [0.0, 0.0, 100.0, 200.0];
+    let clip = [0.0, 0.0, 100.0, 200.0];
+    let (across, down) = draw(rect, clip, [0.0, -100.0, 0.0, 0.0], clip, 1.0).mask();
+    assert_eq!(across, None);
+    near(&down.unwrap(), &[[0.0, 0.0], [0.5, 1.0], [1.0, 1.0]]);
+    let down = draw(rect, clip, [0.0, 100.0, 0.0, 0.0], clip, 1.0).mask().1.unwrap();
+    assert_eq!(down.len(), RAMP_PIECES + 2);
+    assert!(down.windows(2).all(|w| w[0][0] <= w[1][0] && w[0][1] <= w[1][1]));
+    let at = |loc: f64| down.iter().find(|s| (s[0] - loc).abs() < 1e-6).unwrap()[1];
+    assert!((at(0.25) - 0.5).abs() < 1e-3, "smoothstep is half way at the ramp's middle");
+    assert!(at(0.0625) < 0.0625 * 4.0 * 0.5, "and eases in");
+}
+
+#[test]
+fn a_soft_edge_from_an_ancestor_starts_where_its_clip_does() {
+    // The ramp starts 50 above the view, so the view's top is already a quarter of the way in.
+    let d = draw([0.0, 50.0, 100.0, 150.0], [-1e6, 0.0, 1e6, 1e6], [0.0, -200.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], 1.0);
+    near(&d.mask().1.unwrap(), &[[0.0, 0.25], [1.0, 1.0]]);
+}
+
+#[test]
+fn opacity_folds_into_the_mask_down_the_view() {
+    use crate::render::NO_CLIP;
+    let faded = draw([0.0, 0.0, 100.0, 100.0], NO_CLIP, [0.0; 4], NO_CLIP, 0.5).faded_mask().unwrap();
+    assert_eq!(faded, (None, vec![[0.0, 0.5], [1.0, 0.5]]));
+    let clip = [0.0, 0.0, 100.0, 200.0];
+    let (across, down) = draw([0.0, 0.0, 100.0, 200.0], clip, [0.0, -100.0, 0.0, 0.0], clip, 0.5).faded_mask().unwrap();
+    assert_eq!(across, None);
+    near(&down, &[[0.0, 0.0], [0.5, 0.5], [1.0, 0.5]]);
+}
+
+#[test]
+fn spare_views_keep_one_per_material() {
+    use SystemMaterial::{Glass, Popover};
+    assert_eq!(surplus(&[(Glass, true), (Glass, false), (Glass, true), (Popover, true), (Glass, true)]), [4, 2]);
+    assert_eq!(surplus(&[(Glass, false), (Glass, true), (Popover, true)]), Vec::<usize>::new());
+}
+
+#[test]
+fn a_material_carries_its_ancestors_soft_clip_even_inside_a_layer() {
+    fn band(_: &u8, _: &mut Cx<u8>) -> El {
+        // The band composites as one layer at the soft edge (a fill and a child), which takes the
+        // fade off its children's paint; the pill's native view still needs it.
+        let pill = el().size(60.0, 40.0).system_material(SystemMaterial::Glass);
+        el().size(200.0, 120.0).child(el().size(200.0, 120.0).clip_fade_linear(0.0, 30.0, 0.0, 0.0)
+            .child(el().size(200.0, 120.0).fill(Color::WHITE.alpha(0.1)).child(pill)))
+    }
+    let rt = runtime(band, true);
+    assert_eq!(rt.materials.len(), 1);
+    let m = &rt.materials[0];
+    assert_eq!(m.rect, [0.0, 0.0, 120.0, 80.0]);
+    let (across, down) = m.mask();
+    assert_eq!(across, None);
+    near(&down.unwrap(), &[[0.0, 0.0], [0.75, 1.0], [1.0, 1.0]]);
+}
+
+#[test]
+fn an_exiting_material_fades_then_leaves_no_draw() {
+    fn maybe(shown: &u8, _: &mut Cx<u8>) -> El {
+        let root = el().size(200.0, 120.0);
+        if *shown == 1 { root.child(card()) } else { root }
+    }
+    let mut rt = Runtime::new(1u8, maybe, (200.0, 120.0), Env { scale: 2.0, system_dark: true });
+    rt.native_materials = true;
+    rt.frame(0.0);
+    assert_eq!(rt.materials[0].opacity, 1.0);
+    rt.update(|shown, _| *shown = 0);
+    rt.frame(0.0);
+    rt.frame(0.05);
+    let o = rt.materials[0].opacity;
+    assert!(o > 0.0 && o < 1.0, "mid-exit: {o}");
+    rt.frame(1.0);
+    rt.frame(1.0 / 60.0);
+    assert!(rt.materials.is_empty());
 }

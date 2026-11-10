@@ -279,7 +279,7 @@ impl TextEdit {
                 }
                 _ => {}
             },
-            Key::Function(_) | Key::ContextMenu | Key::Insert | Key::PrintScreen | Key::ScrollLock | Key::Pause | Key::Modifier { .. } => {}
+            Key::Function(_) | Key::ContextMenu | Key::Insert | Key::PrintScreen | Key::ScrollLock | Key::Pause | Key::PlayPause | Key::Modifier { .. } => {}
         }
         out
     }

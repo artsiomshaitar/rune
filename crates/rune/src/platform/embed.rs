@@ -9,6 +9,7 @@ use crate::frame::clock::FrameClock;
 use crate::remote::{self, Feed};
 use crate::render::{Gpu, Renderer};
 use crate::runtime::{Env, Runtime, Waker};
+use crate::system_material::{MaterialDraw, NativeHost};
 use crate::time::Instant;
 use crate::tooling::{AppSpec, runtime_for};
 
@@ -44,6 +45,9 @@ pub struct EmbedFrame {
     pub wake_after_secs: Option<f64>,
     /// CPU time spent stepping layout/motion and encoding GPU work, in microseconds.
     pub cpu_us: u64,
+    /// The frame drew nothing over its clear colour: no element and no compositor. On a
+    /// transparent host ([`LayerHost::set_transparent`]) that is a wholly clear layer.
+    pub blank: bool,
 }
 
 /// Drives one Rune [`Runtime`] and [`Renderer`] directly onto a `CAMetalLayer`.
@@ -133,6 +137,23 @@ impl<S: 'static> LayerHost<S> {
         self
     }
 
+    /// Clears each frame to transparent instead of the app root's fill, and makes the layer
+    /// non-opaque, so whatever lies beneath it shows wherever nothing is drawn: a native video
+    /// layer under the controls drawn over it. A fill on the app root still paints, so the app
+    /// leaves it off while it wants to see through. Off again, the layer is opaque and clears to
+    /// the root's fill. Returns whether the layer can composite translucent pixels at all.
+    pub fn set_transparent(&mut self, on: bool) -> bool {
+        let translucent = crate::render::translucency::mode(&self.surface, &self.gpu.adapter);
+        let mode = translucent.filter(|_| on).unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+        if self.config.alpha_mode != mode {
+            self.config.alpha_mode = mode;
+            self.surface.configure(&self.gpu.device, &self.config);
+        }
+        self.rt.transparent = mode != wgpu::CompositeAlphaMode::Opaque;
+        self.rt.invalidate();
+        !on || translucent.is_some()
+    }
+
     pub fn runtime(&self) -> &Runtime<S> {
         &self.rt
     }
@@ -174,8 +195,22 @@ impl<S: 'static> LayerHost<S> {
         self.start.elapsed().as_secs_f64()
     }
 
+    /// Lets elements marked `El::system_material` leave their interior to native views, which
+    /// the shell places from each frame's draws ([`LayerHost::frame_with`]).
+    pub(crate) fn set_native_materials(&mut self, on: bool) {
+        if self.rt.native_materials != on {
+            self.rt.native_materials = on;
+            self.rt.invalidate();
+        }
+    }
+
     /// Steps animations and layout to `Instant::now()` and presents one Metal frame.
     pub fn frame(&mut self) -> EmbedFrame {
+        self.frame_with(None)
+    }
+
+    /// [`LayerHost::frame`], presenting with `materials` moved to this frame's material elements.
+    pub(crate) fn frame_with(&mut self, mut materials: Option<&mut dyn NativeHost>) -> EmbedFrame {
         if self.suspended {
             return EmbedFrame::default();
         }
@@ -190,6 +225,8 @@ impl<S: 'static> LayerHost<S> {
         }
         self.rt.refuse_file_dialog("native file dialogs are unsupported in embedded views");
 
+        let draws: &[MaterialDraw] = if self.rt.native_materials { &self.rt.materials } else { &[] };
+        if let Some(m) = materials.as_deref_mut() { m.acquire(draws) }
         let comp_animating = self.compositor.as_ref().is_some_and(|c| c.animating());
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(f) | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
@@ -233,7 +270,12 @@ impl<S: 'static> LayerHost<S> {
             self.renderer.draw(&mut encoder, &target, self.rt.clear_color());
         }
         self.renderer.submit(&self.gpu.queue, encoder);
-        self.gpu.queue.present(frame);
+        let mut frame = Some(frame);
+        let mut present = || if let Some(f) = frame.take() { self.gpu.queue.present(f) };
+        match materials {
+            Some(m) => m.present(if self.rt.native_materials { &self.rt.materials } else { &[] }, self.rt.env.scale, &mut present),
+            None => present(),
+        }
 
         let cpu_us = t0.elapsed().as_micros() as u64;
         let wake_after_secs = self.rt.wake_deadline().and_then(|d| {
@@ -252,6 +294,7 @@ impl<S: 'static> LayerHost<S> {
             animating: keep_ticking,
             wake_after_secs,
             cpu_us,
+            blank: self.compositor.is_none() && self.rt.instances.is_empty(),
         }
     }
 }
@@ -328,5 +371,80 @@ mod tests {
         assert!(wake > 0.0 && wake <= REPEAT_DELAY, "{wake}");
         host.remote(Input::Release(Button::Down));
         assert_eq!(host.frame().wake_after_secs, None, "released: nothing to wake for");
+    }
+
+    #[derive(Default)]
+    struct Views {
+        acquired: Vec<usize>,
+        presented: Vec<usize>,
+    }
+
+    impl crate::system_material::NativeHost for Views {
+        fn acquire(&mut self, draws: &[crate::system_material::MaterialDraw]) {
+            self.acquired.push(draws.len());
+        }
+        fn present(&mut self, draws: &[crate::system_material::MaterialDraw], _: f32, present: &mut dyn FnMut()) {
+            self.presented.push(draws.len());
+            present();
+            present();
+        }
+    }
+
+    #[test]
+    fn native_materials_reach_the_shell_around_the_present() {
+        use crate::{Color, SystemMaterial, el};
+        let layer: Retained<AnyObject> = unsafe { msg_send![AnyClass::get(c"CAMetalLayer").expect("QuartzCore"), new] };
+        let view = |_: &(), _: &mut Cx<()>| -> El {
+            col().w_full().h_full().child(el().size(60.0, 40.0).fill(Color::WHITE).system_material(SystemMaterial::Popover))
+        };
+        let spec = AppSpec::new("embed-materials", (120.0, 80.0), || (), view);
+        let host = unsafe {
+            LayerHost::from_core_animation_layer(Retained::as_ptr(&layer) as *mut std::ffi::c_void, &spec, (), (120.0, 80.0), 2.0, true, Arc::new(|| {}))
+        };
+        let Ok(mut host) = host else { return };
+        let mut views = Views::default();
+        let out = host.frame_with(Some(&mut views));
+        assert!(out.drew && !out.blank, "without native views the element paints its fill");
+        assert_eq!((views.acquired.as_slice(), views.presented.as_slice()), (&[0][..], &[0][..]));
+
+        host.set_native_materials(true);
+        let out = host.frame_with(Some(&mut views));
+        assert!(out.drew && out.blank, "over a native view the fill goes");
+        assert_eq!((views.acquired.as_slice(), views.presented.as_slice()), (&[0, 1][..], &[0, 1][..]));
+
+        host.set_native_materials(false);
+        host.frame_with(Some(&mut views));
+        assert_eq!(views.presented.last(), Some(&0), "turned off, the shell is told to hide its views");
+    }
+
+    #[test]
+    fn a_transparent_host_clears_to_nothing_and_says_when_it_drew_nothing() {
+        use crate::Color;
+        let layer: Retained<AnyObject> = unsafe { msg_send![AnyClass::get(c"CAMetalLayer").expect("QuartzCore"), new] };
+        let opaque = |layer: &AnyObject| -> bool { unsafe { msg_send![layer, isOpaque] } };
+        let view = |filled: &bool, _: &mut Cx<bool>| -> El {
+            let root = col().w_full().h_full();
+            if *filled { root.fill(Color::BLACK) } else { root }
+        };
+        let spec = AppSpec::new("embed-transparent", (120.0, 80.0), || true, view);
+        let host = unsafe {
+            LayerHost::from_core_animation_layer(Retained::as_ptr(&layer) as *mut std::ffi::c_void, &spec, true, (120.0, 80.0), 2.0, true, Arc::new(|| {}))
+        };
+        let Ok(mut host) = host else { return };
+        let out = host.frame();
+        assert!(out.drew && out.blank, "an opaque host clears to the root's fill and skips painting it");
+        assert!(opaque(&layer));
+        assert_eq!(host.runtime().clear_color()[3], 1.0);
+
+        assert!(host.set_transparent(true));
+        assert!(!opaque(&layer));
+        assert_eq!(host.runtime().clear_color(), [0.0; 4]);
+        assert!(!host.frame().blank, "the root's fill paints over a transparent clear");
+        host.runtime_mut().update(|filled, tx| { *filled = false; tx.instant() });
+        assert!(host.frame().blank, "an unfilled root draws nothing");
+
+        assert!(host.set_transparent(false));
+        assert!(opaque(&layer));
+        assert_eq!(host.runtime().clear_color()[3], 1.0);
     }
 }

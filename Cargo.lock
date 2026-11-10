@@ -4693,6 +4693,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tvos-video"
+version = "0.0.1"
+dependencies = [
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+ "rune",
+]
+
+[[package]]
 name = "typeid"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
