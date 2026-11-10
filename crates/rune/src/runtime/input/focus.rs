@@ -216,6 +216,7 @@ impl<S: 'static> Runtime<S> {
         self.focused = path;
         if self.focused.is_some() {
             self.last_focused = self.focused.clone();
+            self.remember_section_focus();
         }
         self.keyboard_focus = keyboard;
         self.sync_side_focus();

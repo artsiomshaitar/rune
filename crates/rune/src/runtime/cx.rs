@@ -26,6 +26,8 @@ pub(crate) struct ViewDefaults {
     pub(crate) help: Option<super::HelpLook>,
     /// [`Cx::web_focus`].
     pub(crate) web_focus: bool,
+    /// [`Cx::spatial_focus`].
+    pub(crate) spatial_focus: bool,
 }
 
 /// Wakes the shell from another thread (new data arrived); a no-op headless.
@@ -179,6 +181,16 @@ impl<S> Cx<S> {
     /// rather than landing on its close button. Set it on every run of the view.
     pub fn web_focus(&mut self) {
         self.defaults.web_focus = true;
+    }
+    /// Arrow keys move focus to the nearest focusable element that way, as the tvOS focus
+    /// engine does, once nothing else took them (a focused control's own keys, a roving
+    /// [`El::focus_group`](crate::El::focus_group), the app's `on_key`). An arrow with nothing
+    /// focused focuses the element last focused, else the first. See "Spatial focus" in the
+    /// crate README for the rule, [`El::focus_section`](crate::El::focus_section) and the hooks
+    /// that override it. On by default under a Siri Remote ([`crate::remote`]). Set it on every
+    /// run of the view.
+    pub fn spatial_focus(&mut self) {
+        self.defaults.spatial_focus = true;
     }
     /// The height of the titlebar the app draws (`App::titlebar`), in window points, in place of
     /// `Titlebar::new`'s while the view keeps setting it: a band that scales with the app's UI

@@ -48,6 +48,7 @@ mod rare;
 mod ride_trailing;
 mod scroll;
 mod selection_style;
+mod spatial;
 mod sticky;
 mod text;
 
@@ -410,6 +411,7 @@ pub enum Align {
 
 pub use crate::el::anchor::{Anchor, Side, anchor_rect};
 pub use crate::el::direction::Direction;
+pub use crate::el::spatial::{FocusCandidate, FocusDirection, FocusMove, FocusTarget};
 pub(crate) use crate::el::direction::{DirEffect, DirEvent, Flow, Pin, mirror_anchor, mirror_visual, step as step_direction};
 pub(crate) use crate::el::scroll::FadeStyle;
 pub use crate::el::scroll::ScrollFade;
