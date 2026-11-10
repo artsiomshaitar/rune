@@ -815,6 +815,7 @@ impl<S: 'static> Runtime<S> {
                         self.materials.push(crate::system_material::MaterialDraw {
                             id: n.id, material, rect: [r[0], r[1], w, h], radius, continuous,
                             opacity: effective_opacity * n.vis.paint_alpha,
+                            clip: hit_clip, fade: hit_fade, fade_origin: hit_origin,
                         });
                         self.native_materials.then_some(if continuous { -radius } else { radius })
                     }

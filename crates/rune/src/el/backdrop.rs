@@ -5,10 +5,13 @@ use crate::El;
 impl El {
     /// Back this node with a system backdrop material: the platform blurs what is behind the
     /// window under the node's rect and corner radius (the largest of its corners), which follow
-    /// layout and animation like any other paint. Native on macOS in transparent windows, where
-    /// it replaces the fill and the node's shadows skip its interior; elsewhere, in opaque
+    /// layout and animation like any other paint. Native on macOS in transparent windows, and on
+    /// tvOS while an underlay is set (`rune::tvos::set_underlay`), where it blurs that underlay:
+    /// there it replaces the fill and the node's shadows skip its interior; elsewhere, in opaque
     /// windows and in headless renders, the fill (or a neutral tint without one) draws instead.
-    /// Native materials sit under everything the window draws and ignore ancestor clips.
+    /// Native materials sit under everything the window draws. On macOS they ignore ancestor
+    /// clips; on tvOS they follow them, soft edges included, with a rounded clip taken as its
+    /// rectangle.
     /// `Glass` also turns on `continuous_corners`, the only curve `NSGlassEffectView` draws, so
     /// the fill, clip and shadow hole match the glass; `Popover` follows `continuous_corners`.
     pub fn system_material(mut self, material: crate::SystemMaterial) -> Self {

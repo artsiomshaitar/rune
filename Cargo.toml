@@ -22,6 +22,7 @@ members = [
     "themes/opencode",
     "examples/hello",
     "examples/tvos-hello",
+    "examples/tvos-video",
     "examples/web-hello",
     "examples/web-showcase",
     "www/app",

@@ -8,7 +8,7 @@
 //! frame, corner radius and alpha inside it, so the WindowServer composites the material, the
 //! shadow around it and the content on top from the same commit.
 
-use super::{assign, MaterialDraw, Mode, PresentFlag, SystemMaterial, MAX_NATIVE_MATERIALS};
+use super::{assign, surplus, MaterialDraw, Mode, PresentFlag, SystemMaterial, MAX_NATIVE_MATERIALS};
 use rune_motion::NodeId;
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_video::rc::Retained;
@@ -210,15 +210,10 @@ impl Materials {
             slot.shown = None;
             slot.owner = None;
         }
-        // At most one spare view per material: unmounting a few elements needn't keep their views.
-        let mut k = self.slots.len();
-        while k > 0 {
-            k -= 1;
-            let spare = |s: &Slot| s.shown.is_none();
-            if spare(&self.slots[k]) && self.slots[..k].iter().any(|s| spare(s) && s.material == self.slots[k].material) {
-                // SAFETY: removes a view this struct added to the host.
-                unsafe { let _: () = msg_send![&*self.slots.remove(k).view, removeFromSuperview]; }
-            }
+        let views: Vec<_> = self.slots.iter().map(|s| (s.material, s.shown.is_none())).collect();
+        for k in surplus(&views) {
+            // SAFETY: removes a view this struct added to the host.
+            unsafe { let _: () = msg_send![&*self.slots.remove(k).view, removeFromSuperview]; }
         }
     }
 

@@ -40,9 +40,8 @@ pub enum Button {
 }
 
 impl Button {
-    /// The key this button sends: arrows as arrows, Select as Space, Menu as Escape and the
-    /// page buttons as Page Up and Page Down. Play/Pause sends none yet; the shell leaves it to
-    /// the system.
+    /// The key this button sends: arrows as arrows, Select as Space, Menu as Escape, the page
+    /// buttons as Page Up and Page Down, and Play/Pause as [`Key::PlayPause`].
     pub fn key(self) -> Option<Key> {
         Some(match self {
             Self::Up => Key::Up,
@@ -53,7 +52,7 @@ impl Button {
             Self::Menu => Key::Escape,
             Self::PageUp => Key::PageUp,
             Self::PageDown => Key::PageDown,
-            Self::PlayPause => return None,
+            Self::PlayPause => Key::PlayPause,
         })
     }
 
