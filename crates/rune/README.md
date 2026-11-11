@@ -128,10 +128,10 @@ Rune's core crate: views, layout, animation, rendering, text and the native shel
     uploaded, pending, filled) and the renderer's shader (`render/variant.rs`: Classic, Windfoil,
     unavailable) are state machines. CJK faces up to 24 ppem draw their TrueType-hinted outlines
     from whole-pixel pens, at half the dilation, so dense ideographs stay legible at 1x. Renderers
-    start with the Windfoil shader everywhere but macOS, where the Classic shader keeps drawing
+    start with the Windfoil shader everywhere but macOS and tvOS, where the Classic shader keeps drawing
     until text asks for outlines; where it can't be built, the CPU fills the same masks
     (`text/outline/cover.rs`) and moving text draws from them.
-  - `WindfoilChromium`, the default everywhere but macOS and a Mac's browser, then `Slug`,
+  - `WindfoilChromium`, the default everywhere but macOS, tvOS and a Mac's browser, then `Slug`,
     `HintedGpu` and `Hinted`: the other ways to draw from the outline store. Each takes Chromium's weight (no dilation, Skia's text gamma):
     Windfoil's box coverage of the design outline, Slug's two-ray winding (`outline_slug` in
     `outline.wgsl`), the outline after skrifa's light autohint, and that autohinted outline on

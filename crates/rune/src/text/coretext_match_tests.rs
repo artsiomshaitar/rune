@@ -8,6 +8,8 @@ fn the_default_is_on_on_macos_and_windfoil_with_chromiums_weight_elsewhere() {
     assert_eq!(FontSmoothing::default(), want);
     assert_eq!(TextSystem::default().smoothing, want);
     assert_eq!(TextSystem::default().apple_pipeline(), want.pipeline());
+    assert_eq!(default_for(FontSmoothing::Off, true), FontSmoothing::Off, "tvOS keeps Off");
+    assert_eq!(default_for(FontSmoothing::Off, false), FontSmoothing::WindfoilChromium);
 }
 
 #[test]

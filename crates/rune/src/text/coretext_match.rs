@@ -40,7 +40,7 @@ pub enum FontSmoothing {
     /// from its outlines, so it stays sharp and doesn't change when it lands. Where the renderer
     /// can't draw outlines, the CPU fills the same masks and moving text draws from them.
     Windfoil,
-    /// Windfoil with Chromium's weight, and the default everywhere but macOS and a Mac's browser:
+    /// Windfoil with Chromium's weight, and the default everywhere but macOS, tvOS and a Mac's browser:
     /// each glyph's exact box coverage of its outline, with no dilation, drawn through Skia's
     /// text gamma (the luminance-keyed exponent `Off` takes off macOS), as Chromium's grayscale
     /// text weighs. Off macOS a face that carries TrueType hints (IBM Plex Mono, Segoe UI) runs
@@ -74,10 +74,18 @@ pub enum FontSmoothing {
 
 impl Default for FontSmoothing {
     fn default() -> Self {
-        match FontSmoothing::classic() {
-            FontSmoothing::On => FontSmoothing::On,
-            _ => FontSmoothing::WindfoilChromium,
-        }
+        default_for(FontSmoothing::classic(), cfg!(target_os = "tvos"))
+    }
+}
+
+/// The default on an OS whose classic mode is `classic`: that mode where it's `On`, and on tvOS
+/// (`Off`), whose renderer leaves out the Windfoil shader the outline modes draw with
+/// (`Renderer::new`); `WindfoilChromium` elsewhere.
+pub(crate) fn default_for(classic: FontSmoothing, tvos: bool) -> FontSmoothing {
+    match classic {
+        FontSmoothing::On => FontSmoothing::On,
+        _ if tvos => classic,
+        _ => FontSmoothing::WindfoilChromium,
     }
 }
 
@@ -262,7 +270,7 @@ pub(super) fn apple_coverage() -> bool {
         APPLE.with(|apple| *apple)
     }
     #[cfg(not(target_arch = "wasm32"))]
-    { cfg!(any(target_os = "macos", target_os = "ios")) }
+    { cfg!(any(target_os = "macos", target_os = "ios", target_os = "tvos")) }
 }
 
 /// Whether a browser's `navigator` platform is an Apple one: `MacIntel`, `iPhone`, `iPad`,
@@ -288,7 +296,7 @@ pub(super) fn windows_gamma() -> bool {
 /// Apple platforms (`apple`), Windows (`windows`, Chromium's Windows gamma) or neither (Linux's).
 /// With smoothing off on Linux, Windows and the web it stands in for the text gamma a browser's
 /// grayscale antialiasing applies there: light text on a dark page draws heavier and dark text on
-/// a light one a little lighter than coverage blended as is, keyed by the text's luminance. On macOS and iOS coverage
+/// a light one a little lighter than coverage blended as is, keyed by the text's luminance. On macOS, iOS and tvOS coverage
 /// is drawn as is in every mode: CoreText with smoothing off, and Safari and Chrome with
 /// `-webkit-font-smoothing: antialiased`, apply no text gamma (measured on macOS 15.3 with
 /// Chrome 156: the same ink as CoreText, where the gamma drew light-on-dark text up to 24%

@@ -1,0 +1,1 @@
+- **tvOS text defaults to `Off` again, drawn as CoreText draws it.** `WindfoilChromium` became the default everywhere but macOS, tvOS included, but a tvOS renderer leaves out the Windfoil shader for its fragment cost, so tvOS keeps its classic `Off`. `Off` on tvOS now draws coverage as is, as on macOS and iOS, without the browser text gamma.
