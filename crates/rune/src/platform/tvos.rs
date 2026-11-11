@@ -69,9 +69,15 @@ pub unsafe fn set_underlay(layer: *mut std::ffi::c_void) {
     assert!(MainThreadMarker::new().is_some(), "rune::tvos::set_underlay runs on the main thread");
     // SAFETY: the caller's promise: null, or a live object.
     let layer = unsafe { layer.cast::<AnyObject>().as_ref() };
-    let layer = layer.map(|l| l.downcast_ref::<CALayer>().expect("rune::tvos::set_underlay takes a CALayer").retain());
+    let layer = layer.map(|l| {
+        let Some(layer) = l.downcast_ref::<CALayer>() else { panic!("rune::tvos::set_underlay takes a CALayer") };
+        layer.retain()
+    });
     with_controller(|c| c.set_underlay(layer));
 }
+
+/// A step applied to the host once there is one.
+type Attach<S> = Box<dyn FnOnce(LayerHost<S>) -> LayerHost<S>>;
 
 /// A Rune app run as the whole tvOS app. Build it from the same [`AppSpec`] a desktop app runs.
 pub struct TvApp<S: 'static> {
@@ -79,7 +85,7 @@ pub struct TvApp<S: 'static> {
     menu_exits: Option<fn(&S) -> bool>,
     render_scale: Option<f64>,
     /// `TvApp::compositor`, as the step that attaches it to the host once there is one.
-    attach: Option<Box<dyn FnOnce(LayerHost<S>) -> LayerHost<S>>>,
+    attach: Option<Attach<S>>,
 }
 
 thread_local! {
@@ -311,7 +317,9 @@ struct ControllerIvars {
     menu_to_system: Cell<bool>,
     /// `set_underlay`'s layer, under `layer`.
     underlay: RefCell<Option<Retained<CALayer>>>,
-    /// Whether the host draws transparent, which follows `underlay` from the next frame.
+    /// Whether the host was last asked to draw transparent, which follows `underlay` from the
+    /// next frame, and whether it does: a surface that can't composite translucency stays opaque.
+    see_through_asked: Cell<bool>,
     see_through: Cell<bool>,
     /// Native views for material elements, between `underlay` and `layer`.
     materials: RefCell<Option<Materials>>,
@@ -465,6 +473,7 @@ impl Controller {
             background: Cell::new(false),
             menu_to_system: Cell::new(false),
             underlay: RefCell::new(None),
+            see_through_asked: Cell::new(false),
             see_through: Cell::new(false),
             materials: RefCell::new(None),
             wake: Cell::new(0),
@@ -525,7 +534,7 @@ impl Controller {
 
     /// Whether the host's transparency is behind `underlay`'s, and a frame is still to show it.
     fn see_through_stale(&self) -> bool {
-        self.ivars().underlay.borrow().is_some() != self.ivars().see_through.get()
+        self.ivars().underlay.borrow().is_some() != self.ivars().see_through_asked.get()
     }
 
     fn resume(&self) {
@@ -541,8 +550,11 @@ impl Controller {
     fn draw(&self) {
         let ivars = self.ivars();
         if self.see_through_stale() {
-            let on = !ivars.see_through.get();
-            if with_host(|h| h.set_transparent(on)).is_some() { ivars.see_through.set(on) }
+            let on = !ivars.see_through_asked.get();
+            if let Some(translucent) = with_host(|h| h.set_transparent(on)) {
+                ivars.see_through_asked.set(on);
+                ivars.see_through.set(on && translucent);
+            }
         }
         let mut materials = ivars.materials.borrow_mut();
         let native = ivars.see_through.get() && materials.as_ref().is_some_and(Materials::enabled);
@@ -568,8 +580,10 @@ impl Controller {
 fn screen_scale(view: &UIView) -> Option<f64> {
     // `RUNE_TVOS_SCALE=1.5` draws at that scale instead, over `TvApp::render_scale`: for
     // weighing sharpness against frame time on a given Apple TV.
-    if let Some(scale) = std::env::var("RUNE_TVOS_SCALE").ok().and_then(|v| v.parse::<f64>().ok()).filter(|s| *s > 0.0) {
-        return Some(scale);
+    static SCALE_OVERRIDE: std::sync::OnceLock<Option<f64>> = std::sync::OnceLock::new();
+    let scale = *SCALE_OVERRIDE.get_or_init(|| std::env::var("RUNE_TVOS_SCALE").ok()?.parse::<f64>().ok().filter(|s| *s > 0.0));
+    if scale.is_some() {
+        return scale;
     }
     let cap = RENDER_SCALE.with(Cell::get);
     // SAFETY: `UIView.window`, `UIWindow.screen` and `UIScreen.scale` exist on every tvOS this
