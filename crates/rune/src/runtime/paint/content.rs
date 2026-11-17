@@ -26,7 +26,12 @@ pub(super) struct LeafBox {
     pub scale_motion: ScaleMotion,
     /// The scale of the nearest still ancestor, which moving text rasterizes at.
     pub rest: f32,
+    /// Where its box's top left rests once its scale lands, undrifted (device px).
+    pub rest_at: [f32; 2],
     pub gliding: bool,
+    /// How far offsets of boxes that don't pixel-snap move it (device px,
+    /// `pixel_snap::Inherit::drift`): its content draws where it rests, moved by this.
+    pub drift: [f32; 2],
     pub caret: Option<[f32; 4]>,
     /// The rows of the screen, in pixels, where what it draws can show: its clip's, cut to the
     /// window's unless it draws into a layer turned or cached first. A long text draws its
@@ -72,7 +77,9 @@ impl<S: 'static> Runtime<S> {
             cover,
             scale_motion,
             rest,
+            rest_at,
             gliding,
+            drift,
             caret: input_caret,
             shown,
         } = b;
@@ -99,7 +106,7 @@ impl<S: 'static> Runtime<S> {
             // a glide or a swap to an icon doesn't wobble. A view-boxed shape stretches to the box.
             let still = cover.is_none() && scale_motion == ScaleMotion::Still && !gliding && (sc - 1.0).abs() < 1e-5;
             let at = if still {
-                [on_grid(r_exact[0], contain[0]), on_grid(r_exact[1], contain[1])]
+                core::array::from_fn(|a| pixel_snap::drifted(r_exact[a], drift[a], |v| on_grid(v, contain[a])))
             } else {
                 [r[0] + (w - w_exact) * 0.5, r[1] + (h - h_exact) * 0.5]
             };
@@ -188,7 +195,10 @@ impl<S: 'static> Runtime<S> {
             let exact = w_exact.min(h_exact);
             if resting && exact > 1e-4 && !self.text.is_color_icon(ic) {
                 let canvas = (exact - 1.0 / 64.0).ceil().max(1.0) as u32;
-                let at = [on_grid(r_exact[0] + (w_exact - exact) * 0.5, contain[0]), on_grid(r_exact[1] + (h_exact - exact) * 0.5, contain[1])];
+                let at = [
+                    pixel_snap::drifted(r_exact[0] + (w_exact - exact) * 0.5, drift[0], |v| on_grid(v, contain[0])),
+                    pixel_snap::drifted(r_exact[1] + (h_exact - exact) * 0.5, drift[1], |v| on_grid(v, contain[1])),
+                ];
                 if let Some(q) = self.text.icon_quad_sized(ic, (canvas, exact), at, facing) {
                     self.push_icon(icon_inst(&q, at, canvas as f32, 0.0, premul(color, o, srgb), clip, fade));
                 }
@@ -261,6 +271,9 @@ impl<S: 'static> Runtime<S> {
             // out from that pixel, as at rest.
             let (glide, off) = if gliding && cover.is_none() && scale_motion == ScaleMotion::Still {
                 ([pixel_snap::text_glide(r[0]), pixel_snap::text_glide(r[1])], [r[0] - r[0].round(), r[1] - r[1].round()])
+            } else if drift != [0.0; 2] && n.input.is_none() {
+                // Drifting with a box that doesn't snap: laid out where it rests, moved the drift.
+                (drift, drift)
             } else {
                 ([0.0; 2], [0.0; 2])
             };
@@ -563,9 +576,18 @@ impl<S: 'static> Runtime<S> {
                 }
                 self.glyph_scratch.clear();
                 self.text.set_glyph_inks(color, &spans_here);
+                let r_origin = if scale_motion == ScaleMotion::Still {
+                    rest_origin
+                } else if cover.is_none() && n.input.is_none() && tk > 1e-4 {
+                    // Laid out where it will rest, its place in its box unscaled to the rest's
+                    // scale: its pens round as the resting frame's do, and the frame it lands draws
+                    // those glyphs where they rest instead of each a pixel either way.
+                    core::array::from_fn(|a| rest_at[a] + exact_off[a] + (origin[a] - zr[a]) * rest / tk)
+                } else {
+                    [0.0, 0.0]
+                };
                 let origin = rest_origin;
                 self.text.set_glide(glide);
-                let r_origin = if scale_motion == ScaleMotion::Still { origin } else { [0.0, 0.0] };
                 let has_hl_fg = spec.cold.highlights.iter().any(|h| h.fg.is_some());
                 // A cell of a longer run draws its slice of the run's glyphs, shaped in context, at the
                 // same raster factor as a paragraph: under a zoom its masks are made at the zoomed size
