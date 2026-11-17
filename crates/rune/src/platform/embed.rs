@@ -63,7 +63,7 @@ pub struct LayerHost<S: 'static> {
     rt: Runtime<S>,
     clock: FrameClock,
     suspended: bool,
-    remote: Feed,
+    remote: Feed<S>,
     start: Instant,
 }
 
@@ -188,6 +188,15 @@ impl<S: 'static> LayerHost<S> {
     pub fn remote(&mut self, input: remote::Input) {
         let now = self.seconds();
         self.remote.input(&mut self.rt, input, now);
+    }
+
+    /// Hears how far a swipe on the touch surface has gone toward its next arrow
+    /// ([`remote::Lean`]), each time it changes: for a focused control that drifts toward the
+    /// finger before focus steps on. It is back to zero as the arrow fires and when the finger
+    /// lifts. Runs as [`Runtime::update`] does, so the view re-runs with what it changed.
+    pub fn on_remote_lean(mut self, f: fn(&mut S, remote::Lean, &mut crate::Tx)) -> Self {
+        self.remote.on_lean = Some(f);
+        self
     }
 
     /// Seconds since this host opened, the clock the remote's repeats run on.

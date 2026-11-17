@@ -4,6 +4,11 @@ fn steps(effects: Effects<Effect>) -> Vec<Effect> {
     effects.into_iter().collect()
 }
 
+/// The effects without the swipe's leans: what the keys alone did.
+fn keys(effects: Effects<Effect>) -> Vec<Effect> {
+    effects.into_iter().filter(|e| !matches!(e, Effect::Lean(_))).collect()
+}
+
 fn ev(key: Key) -> KeyEvent {
     KeyEvent { key, mods: Mods::default() }
 }
@@ -90,12 +95,12 @@ fn releasing_another_button_keeps_the_held_arrow_and_cancel_stops_it() {
 fn a_swipe_sends_an_arrow_per_step_along_its_main_axis() {
     let mut r = Remote::new();
     assert!(steps(r.step(Input::TouchBegan { x: 960.0, y: 540.0 }, 0.0)).is_empty());
-    assert!(steps(r.step(Input::TouchMoved { x: 960.0 + SWIPE_STEP - 1.0, y: 560.0 }, 0.0)).is_empty());
-    assert_eq!(steps(r.step(Input::TouchMoved { x: 960.0 + SWIPE_STEP + 10.0, y: 580.0 }, 0.0)),
+    assert!(keys(r.step(Input::TouchMoved { x: 960.0 + SWIPE_STEP - 1.0, y: 560.0 }, 0.0)).is_empty());
+    assert_eq!(keys(r.step(Input::TouchMoved { x: 960.0 + SWIPE_STEP + 10.0, y: 580.0 }, 0.0)),
         [Effect::Key(ev(Key::Right)), Effect::KeyUp(ev(Key::Right))]);
     // The next step is measured from where the last one landed, not from the touch's start.
-    assert!(steps(r.step(Input::TouchMoved { x: 960.0 + 2.0 * SWIPE_STEP - 20.0, y: 580.0 }, 0.0)).is_empty());
-    assert_eq!(steps(r.step(Input::TouchMoved { x: 960.0 + 2.0 * SWIPE_STEP, y: 580.0 }, 0.0)).len(), 2);
+    assert!(keys(r.step(Input::TouchMoved { x: 960.0 + 2.0 * SWIPE_STEP - 20.0, y: 580.0 }, 0.0)).is_empty());
+    assert_eq!(keys(r.step(Input::TouchMoved { x: 960.0 + 2.0 * SWIPE_STEP, y: 580.0 }, 0.0)).len(), 2);
 }
 
 #[test]
@@ -113,7 +118,8 @@ fn a_lifted_finger_starts_over() {
     let _ = r.step(Input::TouchMoved { x: SWIPE_STEP - 10.0, y: 0.0 }, 0.0);
     let _ = r.step(Input::TouchEnded, 0.0);
     let _ = r.step(Input::TouchBegan { x: 0.0, y: 0.0 }, 0.0);
-    assert!(steps(r.step(Input::TouchMoved { x: 20.0, y: 0.0 }, 0.0)).is_empty(), "no travel carried over");
+    assert!(keys(r.step(Input::TouchMoved { x: 20.0, y: 0.0 }, 0.0)).is_empty(), "no travel carried over");
+    assert_eq!(r.lean(), Lean { x: 20.0 / SWIPE_STEP, y: 0.0 }, "the lean starts over too");
 }
 
 #[test]
@@ -123,13 +129,86 @@ fn a_move_without_a_start_starts_tracking() {
     assert_eq!(steps(r.step(Input::TouchMoved { x: 500.0 - SWIPE_STEP, y: 500.0 }, 0.0)).first(), Some(&Effect::Key(ev(Key::Left))));
 }
 
+fn leans(effects: Effects<Effect>) -> Vec<Lean> {
+    effects.into_iter().filter_map(|e| match e { Effect::Lean(l) => Some(l), _ => None }).collect()
+}
+
+#[test]
+fn a_swipe_leans_the_way_the_finger_went() {
+    let mut r = Remote::new();
+    let _ = r.step(Input::TouchBegan { x: 960.0, y: 540.0 }, 0.0);
+    assert_eq!(steps(r.step(Input::TouchMoved { x: 960.0 + SWIPE_STEP / 4.0, y: 540.0 + SWIPE_STEP / 8.0 }, 0.0)), [Effect::Lean(Lean { x: 0.25, y: 0.125 })]);
+    assert_eq!(leans(r.step(Input::TouchMoved { x: 960.0 - SWIPE_STEP / 2.0, y: 540.0 }, 0.0)), [Lean { x: -0.5, y: 0.0 }]);
+    assert_eq!(leans(r.step(Input::TouchMoved { x: 960.0 - SWIPE_STEP / 4.0, y: 540.0 + SWIPE_STEP * 0.75 }, 0.0)), [Lean { x: -0.25, y: 0.75 }], "both axes, whichever went further");
+    assert_eq!(r.lean(), Lean { x: -0.25, y: 0.75 });
+}
+
+#[test]
+fn a_step_lets_go_of_both_axes() {
+    let mut r = Remote::new();
+    let _ = r.step(Input::TouchBegan { x: 0.0, y: 0.0 }, 0.0);
+    assert_eq!(leans(r.step(Input::TouchMoved { x: SWIPE_STEP - 10.0, y: 100.0 }, 0.0)), [Lean { x: (SWIPE_STEP - 10.0) / SWIPE_STEP, y: 100.0 / SWIPE_STEP }]);
+    let out = steps(r.step(Input::TouchMoved { x: SWIPE_STEP + 10.0, y: 120.0 }, 0.0));
+    assert_eq!(out, [Effect::Lean(Lean::default()), Effect::Key(ev(Key::Right)), Effect::KeyUp(ev(Key::Right))], "one arrow, on the main axis");
+    assert_eq!(leans(r.step(Input::TouchMoved { x: SWIPE_STEP + 32.0, y: 120.0 - 64.0 }, 0.0)), [Lean { x: 0.1, y: -0.2 }], "measured from where the step landed, on both axes");
+}
+
+#[test]
+fn an_unchanged_lean_sends_nothing() {
+    let mut r = Remote::new();
+    let _ = r.step(Input::TouchBegan { x: 0.0, y: 0.0 }, 0.0);
+    assert!(steps(r.step(Input::TouchMoved { x: 0.0, y: 0.0 }, 0.0)).is_empty());
+    let _ = r.step(Input::TouchMoved { x: 32.0, y: 0.0 }, 0.0);
+    assert!(steps(r.step(Input::TouchMoved { x: 32.0, y: 0.0 }, 0.0)).is_empty());
+}
+
+#[test]
+fn the_lean_is_back_to_zero_as_the_arrow_fires() {
+    let mut r = Remote::new();
+    let _ = r.step(Input::TouchBegan { x: 0.0, y: 0.0 }, 0.0);
+    let _ = r.step(Input::TouchMoved { x: SWIPE_STEP - 10.0, y: 0.0 }, 0.0);
+    assert_eq!(steps(r.step(Input::TouchMoved { x: SWIPE_STEP + 10.0, y: 0.0 }, 0.0)),
+        [Effect::Lean(Lean::default()), Effect::Key(ev(Key::Right)), Effect::KeyUp(ev(Key::Right))], "the lean lets go before focus moves");
+    assert_eq!(r.lean(), Lean::default());
+    assert_eq!(leans(r.step(Input::TouchMoved { x: SWIPE_STEP + 80.0, y: 0.0 }, 0.0)), [Lean { x: 0.25, y: 0.0 }], "measured from where the step landed");
+}
+
+#[test]
+fn a_lifted_finger_lets_the_lean_go() {
+    let mut r = Remote::new();
+    let _ = r.step(Input::TouchBegan { x: 0.0, y: 0.0 }, 0.0);
+    let _ = r.step(Input::TouchMoved { x: 0.0, y: -SWIPE_STEP / 2.0 }, 0.0);
+    assert_eq!(steps(r.step(Input::TouchEnded, 0.0)), [Effect::Lean(Lean::default())]);
+    assert!(steps(r.step(Input::TouchEnded, 0.0)).is_empty(), "nothing leaning, nothing to send");
+    assert_eq!(r.lean(), Lean::default());
+}
+
+#[test]
+fn a_fast_swipe_fires_its_arrows_in_the_same_step_with_no_lean_left() {
+    let mut r = Remote::new();
+    let _ = r.step(Input::TouchBegan { x: 0.0, y: 0.0 }, 0.0);
+    let _ = r.step(Input::TouchMoved { x: 100.0, y: 0.0 }, 0.0);
+    let out = steps(r.step(Input::TouchMoved { x: 3.0 * SWIPE_STEP + 40.0, y: 0.0 }, 0.0));
+    assert_eq!(out.iter().filter(|e| **e == Effect::Key(ev(Key::Right))).count(), 3);
+    assert_eq!(out[0], Effect::Lean(Lean::default()));
+    assert_eq!(r.lean(), Lean::default());
+}
+
+#[test]
+fn presses_never_lean() {
+    let mut r = Remote::new();
+    let out = steps(r.step(Input::Press(Button::Right), 0.0));
+    assert!(!out.iter().any(|e| matches!(e, Effect::Lean(_))));
+}
+
 mod feed {
-    use super::super::{Button, Feed, Input, REPEAT_DELAY, REPEAT_INTERVAL};
+    use super::super::{Button, Feed, Input, Lean, REPEAT_DELAY, REPEAT_INTERVAL, SWIPE_STEP};
     use crate::{Cx, El, Env, Key, KeyEvent, Runtime, Tx, col};
 
     #[derive(Default)]
     struct Heard {
         keys: Vec<(Key, bool)>,
+        leans: Vec<Lean>,
     }
 
     fn view(_: &Heard, _: &mut Cx<Heard>) -> El {
@@ -182,5 +261,29 @@ mod feed {
         rt.frame(1.0 / 60.0);
         assert_eq!(rt.state.keys, [(Key::Text(" ".into()), false), (Key::Escape, false)]);
         assert_eq!(feed.wake_at(), None);
+    }
+
+    #[test]
+    fn a_swipe_reaches_the_app_as_leans_then_an_arrow() {
+        let mut rt = runtime();
+        let mut feed = Feed::default();
+        feed.on_lean = Some(|s: &mut Heard, lean, _| s.leans.push(lean));
+        feed.input(&mut rt, Input::TouchBegan { x: 0.0, y: 0.0 }, 0.0);
+        feed.input(&mut rt, Input::TouchMoved { x: SWIPE_STEP / 2.0, y: 0.0 }, 0.0);
+        feed.input(&mut rt, Input::TouchMoved { x: SWIPE_STEP, y: 0.0 }, 0.0);
+        rt.frame(1.0 / 60.0);
+        assert_eq!(rt.state.leans, [Lean { x: 0.5, y: 0.0 }, Lean::default()]);
+        assert_eq!(rt.state.keys, [(Key::Right, false)]);
+    }
+
+    #[test]
+    fn without_a_lean_handler_a_swipe_still_sends_its_arrows() {
+        let mut rt = runtime();
+        let mut feed = Feed::default();
+        feed.input(&mut rt, Input::TouchBegan { x: 0.0, y: 0.0 }, 0.0);
+        feed.input(&mut rt, Input::TouchMoved { x: 0.0, y: SWIPE_STEP }, 0.0);
+        rt.frame(1.0 / 60.0);
+        assert_eq!(rt.state.keys, [(Key::Down, false)]);
+        assert!(rt.state.leans.is_empty());
     }
 }

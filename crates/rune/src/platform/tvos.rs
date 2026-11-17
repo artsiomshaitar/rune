@@ -4,7 +4,8 @@
 //! window whose view controller holds a `CAMetalLayer` filling its view, drives a
 //! [`LayerHost`] onto it from a `CADisplayLink`, and pauses the link while nothing animates,
 //! as an idle desktop window draws nothing. Siri Remote presses and touch-surface swipes reach
-//! the app as keys ([`crate::remote`]).
+//! the app as keys ([`crate::remote`]), and a swipe's travel between keys as a lean
+//! ([`TvApp::on_remote_lean`]).
 //!
 //! The app's `Info.plist` names the scene delegate, as UIKit requires of a scene-based app:
 //!
@@ -86,6 +87,7 @@ pub struct TvApp<S: 'static> {
     render_scale: Option<f64>,
     /// `TvApp::compositor`, as the step that attaches it to the host once there is one.
     attach: Option<Attach<S>>,
+    on_lean: Option<fn(&mut S, crate::remote::Lean, &mut crate::Tx)>,
 }
 
 thread_local! {
@@ -95,7 +97,7 @@ thread_local! {
 
 impl<S: 'static> TvApp<S> {
     pub fn new(spec: AppSpec<S>) -> Self {
-        Self { spec, menu_exits: None, render_scale: None, attach: None }
+        Self { spec, menu_exits: None, render_scale: None, attach: None, on_lean: None }
     }
 
     /// Whether a Menu press goes to the system instead of the app, asked as the press begins.
@@ -123,9 +125,17 @@ impl<S: 'static> TvApp<S> {
         self
     }
 
+    /// Hears how far a swipe on the touch surface has gone toward its next arrow, as
+    /// [`LayerHost::on_remote_lean`] does: the focused control can drift toward the finger before
+    /// focus steps on, as tvOS's own focus engine moves it.
+    pub fn on_remote_lean(mut self, f: fn(&mut S, crate::remote::Lean, &mut crate::Tx)) -> Self {
+        self.on_lean = Some(f);
+        self
+    }
+
     /// Starts UIKit and never returns. Call it from `main` on the main thread.
     pub fn run(self) -> ! {
-        let Self { spec, menu_exits, render_scale, attach } = self;
+        let Self { spec, menu_exits, render_scale, attach, on_lean } = self;
         RENDER_SCALE.with(|cell| cell.set(render_scale));
         FACTORY.with(|f| {
             *f.borrow_mut() = Some(Box::new(move |layer, viewport, scale, wake| {
@@ -135,6 +145,10 @@ impl<S: 'static> TvApp<S> {
                 let host = unsafe { LayerHost::from_core_animation_layer(layer, &spec, state, viewport, scale, true, wake)? };
                 let host = match attach {
                     Some(attach) => attach(host),
+                    None => host,
+                };
+                let host = match on_lean {
+                    Some(f) => host.on_remote_lean(f),
                     None => host,
                 };
                 Ok(Box::new(Hosted { host, menu_exits }) as Box<dyn Host>)

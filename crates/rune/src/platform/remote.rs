@@ -6,7 +6,9 @@
 //! the focused control, and Menu as Escape. UIKit sends a held arrow once, so a held arrow or
 //! page button repeats here: after [`REPEAT_DELAY`], then every [`REPEAT_INTERVAL`], as an OS
 //! key repeat (`Tx::key_repeat` is true for it). A swipe on the touch surface sends one arrow
-//! for every [`SWIPE_STEP`] points it travels along its main axis.
+//! for every [`SWIPE_STEP`] points it travels along its main axis, and between arrows the travel
+//! since the last one is a [`Lean`], so the focused control can drift toward the finger before
+//! focus steps on, as tvOS's own focus engine does.
 //!
 //! [`Remote::step`] is the whole machine: input and the time in, keys out. A held button's
 //! repeat is a timer: the step that starts it returns [`Effect::WakeAt`] with its attempt, and the
@@ -24,6 +26,15 @@ pub const REPEAT_INTERVAL: f64 = 0.12;
 /// tvOS reports an indirect touch in the coordinates of the view it lands on, so a 1920-point
 /// wide screen takes about six steps from edge to edge.
 pub const SWIPE_STEP: f32 = 320.0;
+
+/// Where a swipe on the touch surface has gone since its last arrow: its travel on each axis over
+/// [`SWIPE_STEP`], from -1 (left or up) to 1 (right or down), so the pair points the way the
+/// finger went. It is back to zero when an arrow fires and when the finger lifts.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Lean {
+    pub x: f32,
+    pub y: f32,
+}
 
 /// A Siri Remote button, as UIKit's `UIPress.PressType` names it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -89,6 +100,8 @@ pub enum Effect {
     WakeAt { attempt: Attempt, due: f64 },
     /// The repeat timer is gone (the arrow came up): the host needn't wake for it.
     CancelWake,
+    /// The swipe's [`Lean`] changed.
+    Lean(Lean),
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -102,8 +115,9 @@ enum Hold {
 enum Swipe {
     #[default]
     Idle,
-    /// A finger is down; `x` and `y` are where the next step is measured from.
-    Tracking { x: f32, y: f32 },
+    /// A finger is down; `x` and `y` are where the next step is measured from, and `lean` is the
+    /// last [`Lean`] sent.
+    Tracking { x: f32, y: f32, lean: Lean },
 }
 
 /// The remote's held button and the touch in progress.
@@ -161,12 +175,13 @@ impl Remote {
                 _ => Effects::none(),
             },
             Input::TouchBegan { x, y } => {
-                self.swipe = Swipe::Tracking { x, y };
-                Effects::none()
+                let was = self.lean();
+                self.swipe = Swipe::Tracking { x, y, lean: Lean::default() };
+                Self::lean_changed(was, Lean::default())
             }
             Input::TouchMoved { x, y } => {
-                let Swipe::Tracking { x: x0, y: y0 } = self.swipe else {
-                    self.swipe = Swipe::Tracking { x, y };
+                let Swipe::Tracking { x: x0, y: y0, lean } = self.swipe else {
+                    self.swipe = Swipe::Tracking { x, y, lean: Lean::default() };
                     return Effects::none();
                 };
                 let (dx, dy) = (x - x0, y - y0);
@@ -174,7 +189,9 @@ impl Remote {
                 let travel = if horizontal { dx } else { dy };
                 let steps = (travel.abs() / SWIPE_STEP).floor() as u32;
                 if steps == 0 {
-                    return Effects::none();
+                    let next = Lean { x: (dx / SWIPE_STEP).clamp(-1.0, 1.0), y: (dy / SWIPE_STEP).clamp(-1.0, 1.0) };
+                    self.swipe = Swipe::Tracking { x: x0, y: y0, lean: next };
+                    return Self::lean_changed(lean, next);
                 }
                 let key = match (horizontal, travel > 0.0) {
                     (true, true) => Key::Right,
@@ -184,8 +201,9 @@ impl Remote {
                 };
                 // The cross axis starts over too, so a long diagonal drift never turns.
                 let used = steps as f32 * SWIPE_STEP * travel.signum();
-                self.swipe = if horizontal { Swipe::Tracking { x: x0 + used, y } } else { Swipe::Tracking { x, y: y0 + used } };
-                let mut out = Effects::none();
+                let rest = Lean::default();
+                self.swipe = if horizontal { Swipe::Tracking { x: x0 + used, y, lean: rest } } else { Swipe::Tracking { x, y: y0 + used, lean: rest } };
+                let mut out = Self::lean_changed(lean, rest);
                 for _ in 0..steps {
                     out.push(Effect::Key(event(key.clone())));
                     out.push(Effect::KeyUp(event(key.clone())));
@@ -193,26 +211,45 @@ impl Remote {
                 out
             }
             Input::TouchEnded => {
+                let was = self.lean();
                 self.swipe = Swipe::Idle;
-                Effects::none()
+                Self::lean_changed(was, Lean::default())
             }
         }
     }
+
+    /// The swipe's current [`Lean`]: zero while no finger is down.
+    pub fn lean(&self) -> Lean {
+        match self.swipe {
+            Swipe::Tracking { lean, .. } => lean,
+            Swipe::Idle => Lean::default(),
+        }
+    }
+
+    fn lean_changed(was: Lean, now: Lean) -> Effects<Effect> {
+        if was == now { Effects::none() } else { Effects::one(Effect::Lean(now)) }
+    }
 }
 
-/// A [`Remote`] feeding a [`Runtime`](crate::Runtime): its keys go in as the OS's would, and
-/// the repeat it waits for is kept until [`Feed::poll`] finds it due. Times are seconds from
-/// any one origin.
+/// A [`Remote`] feeding a [`Runtime`](crate::Runtime): its keys go in as the OS's would, its
+/// [`Lean`] goes to `on_lean`, and the repeat it waits for is kept until [`Feed::poll`] finds it
+/// due. Times are seconds from any one origin.
 #[cfg_attr(not(any(test, target_vendor = "apple")), allow(dead_code))]
-#[derive(Debug, Default)]
-pub(crate) struct Feed {
+pub(crate) struct Feed<S> {
     remote: Remote,
     wake: Option<(Attempt, f64)>,
+    pub(crate) on_lean: Option<fn(&mut S, Lean, &mut crate::Tx)>,
+}
+
+impl<S> Default for Feed<S> {
+    fn default() -> Self {
+        Self { remote: Remote::default(), wake: None, on_lean: None }
+    }
 }
 
 #[cfg_attr(not(any(test, target_vendor = "apple")), allow(dead_code))]
-impl Feed {
-    pub(crate) fn input<S: 'static>(&mut self, rt: &mut crate::Runtime<S>, input: Input, now: f64) {
+impl<S: 'static> Feed<S> {
+    pub(crate) fn input(&mut self, rt: &mut crate::Runtime<S>, input: Input, now: f64) {
         rt.remote_drives_focus();
         for effect in self.remote.step(input, now) {
             match effect {
@@ -224,12 +261,15 @@ impl Feed {
                 }
                 Effect::WakeAt { attempt, due } => self.wake = Some((attempt, due)),
                 Effect::CancelWake => self.wake = None,
+                Effect::Lean(lean) => {
+                    if let Some(f) = self.on_lean { rt.update(|s, tx| f(s, lean, tx)) }
+                }
             }
         }
     }
 
     /// Feeds the waiting repeat back when it is due.
-    pub(crate) fn poll<S: 'static>(&mut self, rt: &mut crate::Runtime<S>, now: f64) {
+    pub(crate) fn poll(&mut self, rt: &mut crate::Runtime<S>, now: f64) {
         if let Some((attempt, due)) = self.wake
             && now >= due
         {
