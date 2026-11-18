@@ -74,6 +74,15 @@ pub(super) fn text_glide(top: f32) -> f32 {
     if g.abs() < 1.0 / 64.0 { 0.0 } else { g }
 }
 
+/// Where content that rests at `at` on the grid draws (device px) moved by `drift`
+/// ([`Inherit::drift`]): the resting place, rounded as at rest, plus the drift. Inside a box that
+/// isn't pixel-snapped and that an app moves by sub-pixel offsets, its glyphs, shapes and icons
+/// then keep their place against its exact edges instead of each stepping a pixel at a time, and
+/// once the offset is back to zero they draw exactly as they rest.
+pub(super) fn drifted(at: f32, drift: f32, on_grid: impl Fn(f32) -> f32) -> f32 {
+    on_grid(at - drift) + drift
+}
+
 /// One moving node's glide: its edges' corrections go from `from` to `to` (the resting rect's
 /// rounding) as their motion goes from `span` to 0.
 #[derive(Clone, Copy)]
@@ -110,6 +119,10 @@ impl Glide {
 pub(super) struct Inherit {
     /// `El::pixel_snap(false)` above, or a turn: this subtree draws at its exact edges.
     pub off: bool,
+    /// How far the offsets of `El::pixel_snap(false)` boxes here and above move this subtree
+    /// (device px): its text, shapes and icons draw where they rest, on the grid, moved by this,
+    /// so they drift with their boxes' exact edges ([`drifted`]).
+    pub drift: [f32; 2],
     /// The translation in points from scrolls, sticky shifts and growth rows above, which
     /// snaps as a whole.
     pub rigid: [f32; 2],
@@ -135,7 +148,7 @@ impl Inherit {
     pub(super) fn hash_bits(&self, h: &mut impl std::hash::Hasher) {
         h.write_u8(self.off as u8);
         h.write_u8(self.shifted as u8);
-        for v in self.rigid.iter().chain(&self.contain) { h.write_u32(v.to_bits()); }
+        for v in self.rigid.iter().chain(&self.contain).chain(&self.drift) { h.write_u32(v.to_bits()); }
         h.write_u32(self.layer);
         match &self.parent {
             Some(p) => {

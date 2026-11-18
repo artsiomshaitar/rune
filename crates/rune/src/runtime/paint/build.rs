@@ -491,6 +491,29 @@ impl<S: 'static> Runtime<S> {
                 pinh.fade = [0.0; 4];
                 pinh.fade_origin = NO_CLIP;
             }
+            // `El::pixel_snap(false)` moved by its own offset: what it and its subtree hold drifts
+            // with it (`pixel_snap::Inherit::drift`). Not inside a turn, which draws upright.
+            let drift = if turn_index == 0 && (pinh.snap.off || n.vis_flags.no_pixel_snap()) && !lift {
+                let o = self.scene.get(n.id, prop::OFFSET).unwrap_or(rune_motion::Vec2::ZERO);
+                [pinh.snap.drift[0] + o.x * pinh.scale * s, pinh.snap.drift[1] + o.y * pinh.scale * s]
+            } else {
+                [0.0; 2]
+            };
+            // What this box's own content drifts by: its drawn edges against where they'd draw
+            // with no drift, both on the 1/64 px grid, rather than the drift itself. They differ by
+            // up to 1/128 px frame to frame, and content laid out from the drawn edges less the
+            // drift then wobbles that much about its resting place: a glyph whose pen rests on a
+            // pixel boundary (a label's first, at whole points) floored a whole pixel either way.
+            let content_drift = if drift == [0.0; 2] { drift } else {
+                core::array::from_fn(|a| r_exact[a] - snap_px(rect_pt[a] - drift[a] / s))
+            };
+            // Where its box's top left rests once its scale lands (the nearest still ancestor's
+            // transform), undrifted, on the grid as it draws there: text whose scale moves lays
+            // out from there, so it lands on the pens it rests on.
+            let rest_at: [f32; 2] = {
+                let (k, from, to) = pinh.still;
+                core::array::from_fn(|a| snap_px(to[a] + (raw_edges[a] - from[a]) * k - drift[a] / s))
+            };
             // Where the node shows on screen, upright: the turned box's bounds.
             let mut screen_r = [r_exact[0], r_exact[1], r_exact[2].max(r_exact[0]), r_exact[3].max(r_exact[1])];
             if let Some(t) = node_turn { screen_r = t.bbox(screen_r); }
@@ -1184,7 +1207,9 @@ impl<S: 'static> Runtime<S> {
                         cover,
                         scale_motion,
                         rest: pinh.still.0,
+                        rest_at,
                         gliding,
+                        drift: if cover.is_none() { content_drift } else { [0.0; 2] },
                         caret: input_caret.map(|(caret, _)| caret),
                         shown: if node_turn.is_none() && !pinh.in_cache { [clip[1].max(vp[1] - m), clip[3].min(vp[3] + m)] } else { [clip[1], clip[3]] },
                     },
@@ -1287,7 +1312,7 @@ impl<S: 'static> Runtime<S> {
                 hit_opacity: hit_opacity * kids_fade, group_rect: if hover_owner { rect_pt } else { pinh.group_rect },
                 scale_motion, still: if scale_motion == ScaleMotion::Still { (scale, anchor, anchor_to) } else { pinh.still },
                 in_cache, skip_paint, turn: turn_index,
-                snap: pixel_snap::Inherit { off: snap_off, rigid: snap_rigid, contain: snap_contain, steps, shifted: pinh.snap.shifted || n.vis.offset != [0.0; 2], layer: if cover.is_some() { 0 } else { snap_layer }, parent: snap_rest.filter(|_| cover.is_none() && snap_rigid == pinh.snap.rigid && pixel_snap::frames(&n.vis)) } };
+                snap: pixel_snap::Inherit { off: snap_off, drift, rigid: snap_rigid, contain: snap_contain, steps, shifted: pinh.snap.shifted || n.vis.offset != [0.0; 2], layer: if cover.is_some() { 0 } else { snap_layer }, parent: snap_rest.filter(|_| cover.is_none() && snap_rigid == pinh.snap.rigid && pixel_snap::frames(&n.vis)) } };
             // Shown only under its group's hover, it takes presses where the pointer hovers the
             // group: a press in the same frame as the move that reveals it finds it, as a page's
             // `:hover` applies before the press does.

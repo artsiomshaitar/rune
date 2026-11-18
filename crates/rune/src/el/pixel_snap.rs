@@ -14,7 +14,8 @@ impl El {
     /// sub-pixel edges while the scale moves and eases onto whole pixels once it holds still.
     /// Turn it off for an element an app moves itself frame by frame at sub-pixel speeds
     /// (`El::offset` from a value it animates), so it glides instead of stepping a pixel at a
-    /// time.
+    /// time. Its text, shapes and icons glide with it: they draw where they rest, on whole
+    /// pixels, moved by the offset (text in quarter-pixel steps).
     pub fn pixel_snap(mut self, on: bool) -> Self {
         self.vis_flags.set(crate::el::VisualFlags::NO_PIXEL_SNAP, !on);
         self
